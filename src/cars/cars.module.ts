@@ -4,11 +4,11 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { CarsController } from './cars.controller';
 import { CarsService } from './cars.service';
 import { Car } from './entities/car.entity';
+import { CarCategory } from '../car-categories/entities/car-category.entity';
 
 @Module({
   imports: [
-    // Makes the Car repository available inside CarsService
-    TypeOrmModule.forFeature([Car]),
+    TypeOrmModule.forFeature([Car, CarCategory]),
   ],
   controllers: [CarsController],
   providers: [CarsService],

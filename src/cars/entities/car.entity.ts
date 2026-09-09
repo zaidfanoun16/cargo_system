@@ -2,9 +2,13 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  JoinColumn,
+  ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+
+import { CarCategory } from '../../car-categories/entities/car-category.entity';
 
 @Entity('cars')
 export class Car {
@@ -31,6 +35,13 @@ export class Car {
   // Current car status
   @Column({ default: 'AVAILABLE' })
   status: string;
+
+  // Each car belongs to one category
+  @ManyToOne(() => CarCategory, (category) => category.cars, {
+    nullable: false,
+  })
+  @JoinColumn({ name: 'categoryId' })
+  category: CarCategory;
 
   // Record creation date
   @CreateDateColumn()

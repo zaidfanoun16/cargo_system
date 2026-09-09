@@ -1,35 +1,61 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { Car } from './entities/car.entity';
 import { CreateCarDto } from './dto/create-car.dto';
 import { UpdateCarDto } from './dto/update-car.dto';
+import { CarCategory } from '../car-categories/entities/car-category.entity';
 
 @Injectable()
 export class CarsService {
   constructor(
-    // Injects the Car repository to communicate with PostgreSQL
     @InjectRepository(Car)
     private readonly carsRepository: Repository<Car>,
+
+    @InjectRepository(CarCategory)
+    private readonly carCategoriesRepository: Repository<CarCategory>,
   ) {}
 
-  // Creates and saves a new car
   async create(createCarDto: CreateCarDto): Promise<Car> {
-    const car = this.carsRepository.create(createCarDto);
+    const { categoryId, ...carData } = createCarDto;
+
+    const category = await this.carCategoriesRepository.findOne({
+      where: { id: categoryId },
+    });
+
+    if (!category) {
+      throw new NotFoundException(
+        `Car category with ID ${categoryId} not found`,
+      );
+    }
+
+    const car = this.carsRepository.create({
+      ...carData,
+      category,
+    });
 
     return this.carsRepository.save(car);
   }
 
-  // Returns all cars
   async findAll(): Promise<Car[]> {
-    return this.carsRepository.find();
+    return this.carsRepository.find({
+      relations: {
+        category: true,
+      },
+    });
   }
 
-  // Returns one car by ID
   async findOne(id: number): Promise<Car> {
     const car = await this.carsRepository.findOne({
       where: { id },
+      relations: {
+        category: true,
+      },
     });
 
     if (!car) {
@@ -39,16 +65,33 @@ export class CarsService {
     return car;
   }
 
-  // Updates an existing car
-  async update(id: number, updateCarDto: UpdateCarDto): Promise<Car> {
+  async update(
+    id: number,
+    updateCarDto: UpdateCarDto,
+  ): Promise<Car> {
     const car = await this.findOne(id);
 
-    Object.assign(car, updateCarDto);
+    const { categoryId, ...carData } = updateCarDto;
+
+    if (categoryId !== undefined) {
+      const category = await this.carCategoriesRepository.findOne({
+        where: { id: categoryId },
+      });
+
+      if (!category) {
+        throw new NotFoundException(
+          `Car category with ID ${categoryId} not found`,
+        );
+      }
+
+      car.category = category;
+    }
+
+    Object.assign(car, carData);
 
     return this.carsRepository.save(car);
   }
 
-  // Deletes an existing car
   async remove(id: number): Promise<void> {
     const car = await this.findOne(id);
 

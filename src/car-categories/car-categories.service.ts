@@ -1,26 +1,64 @@
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+
+import { CarCategory } from './entities/car-category.entity';
 import { CreateCarCategoryDto } from './dto/create-car-category.dto';
 import { UpdateCarCategoryDto } from './dto/update-car-category.dto';
 
 @Injectable()
 export class CarCategoriesService {
-  create(createCarCategoryDto: CreateCarCategoryDto) {
-    return 'This action adds a new carCategory';
+  constructor(
+    @InjectRepository(CarCategory)
+    private readonly carCategoriesRepository: Repository<CarCategory>,
+  ) {}
+
+  async create(
+    createCarCategoryDto: CreateCarCategoryDto,
+  ): Promise<CarCategory> {
+    const category = this.carCategoriesRepository.create(
+      createCarCategoryDto,
+    );
+
+    return this.carCategoriesRepository.save(category);
   }
 
-  findAll() {
-    return `This action returns all carCategories`;
+  async findAll(): Promise<CarCategory[]> {
+    return this.carCategoriesRepository.find();
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} carCategory`;
+  async findOne(id: number): Promise<CarCategory> {
+    const category = await this.carCategoriesRepository.findOne({
+      where: { id },
+    });
+
+    if (!category) {
+      throw new NotFoundException(
+        `Car category with ID ${id} not found`,
+      );
+    }
+
+    return category;
   }
 
-  update(id: number, updateCarCategoryDto: UpdateCarCategoryDto) {
-    return `This action updates a #${id} carCategory`;
+  async update(
+    id: number,
+    updateCarCategoryDto: UpdateCarCategoryDto,
+  ): Promise<CarCategory> {
+    const category = await this.findOne(id);
+
+    Object.assign(category, updateCarCategoryDto);
+
+    return this.carCategoriesRepository.save(category);
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} carCategory`;
+  async remove(id: number): Promise<void> {
+    const category = await this.findOne(id);
+
+    await this.carCategoriesRepository.remove(category);
   }
 }

@@ -4,21 +4,23 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { UsersModule } from './users/users.module';
 
 import { CarCategoriesModule } from './car-categories/car-categories.module';
 import { CarsModule } from './cars/cars.module';
 
 @Module({
   imports: [
-    // Loads environment variables from .env
+    // Load environment variables from the .env file
     ConfigModule.forRoot({
       isGlobal: true,
     }),
 
-    // Connects NestJS to PostgreSQL using TypeORM
+    // Connect NestJS to PostgreSQL using TypeORM
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
+
       useFactory: (configService: ConfigService) => ({
         type: 'postgres',
         host: configService.get<string>('DB_HOST'),
@@ -26,12 +28,17 @@ import { CarsModule } from './cars/cars.module';
         username: configService.get<string>('DB_USERNAME'),
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_NAME'),
+
+        // Automatically load entities from feature modules
         autoLoadEntities: true,
+
+        // Use migrations later; do not synchronize automatically
         synchronize: false,
       }),
     }),
 
     // Application feature modules
+    UsersModule,
     CarCategoriesModule,
     CarsModule,
   ],

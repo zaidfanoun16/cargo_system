@@ -7,11 +7,13 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 
 import { CarsService } from './cars.service';
 import { CreateCarDto } from './dto/create-car.dto';
 import { UpdateCarDto } from './dto/update-car.dto';
+  import { CarsQueryDto } from './dto/cars-query.dto'; 
 
 @Controller('cars')
 export class CarsController {
@@ -23,11 +25,10 @@ export class CarsController {
     return this.carsService.create(createCarDto);
   }
 
-  // GET /cars
-  @Get()
-  findAll() {
-    return this.carsService.findAll();
-  }
+ @Get()
+findAll(@Query() query: CarsQueryDto) {
+  return this.carsService.findAll(query);
+}
 
   // GET /cars/:id
   @Get(':id')

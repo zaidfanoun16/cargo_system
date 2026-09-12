@@ -31,7 +31,7 @@ export class CreateCarDto {
 
   @IsString()
   @IsNotEmpty()
-  @IsIn(['AVAILABLE', 'RENTED', 'MAINTENANCE'])
+  @IsIn(['AVAILABLE', 'RESERVED', 'MAINTENANCE'])
   status: string;
 
   @IsInt()

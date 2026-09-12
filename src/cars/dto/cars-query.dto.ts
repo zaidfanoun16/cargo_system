@@ -29,6 +29,12 @@ export class CarsQueryDto {
   model?: string;
 
   @IsOptional()
-  @IsIn(['AVAILABLE', 'RENTED', 'MAINTENANCE'])
+  @IsIn(['AVAILABLE', 'RESERVED', 'MAINTENANCE'])
   status?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  categoryId?: number;
 }

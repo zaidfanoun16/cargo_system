@@ -9,9 +9,10 @@ import { ILike, Repository } from 'typeorm';
 import { Car } from './entities/car.entity';
 import { CreateCarDto } from './dto/create-car.dto';
 import { UpdateCarDto } from './dto/update-car.dto';
+import { CarsQueryDto } from './dto/cars-query.dto';
 import { CarCategory } from '../car-categories/entities/car-category.entity';
 import { CarStatus } from './enums/car-status.enum';
-import { CarsQueryDto } from './dto/cars-query.dto';
+
 @Injectable()
 export class CarsService {
   constructor(
@@ -20,7 +21,7 @@ export class CarsService {
 
     @InjectRepository(CarCategory)
     private readonly carCategoriesRepository: Repository<CarCategory>,
-  ) { }
+  ) {}
 
   async create(createCarDto: CreateCarDto): Promise<Car> {
     const { categoryId, ...carData } = createCarDto;
@@ -51,6 +52,7 @@ export class CarsService {
       brand,
       model,
       status,
+      categoryId,
     } = query;
 
     const [cars, total] = await this.carsRepository.findAndCount({
@@ -58,6 +60,11 @@ export class CarsService {
         ...(brand && { brand: ILike(`%${brand}%`) }),
         ...(model && { model: ILike(`%${model}%`) }),
         ...(status && { status }),
+        ...(categoryId && {
+          category: {
+            id: categoryId,
+          },
+        }),
       },
       relations: {
         category: true,

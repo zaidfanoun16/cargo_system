@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import * as bcrypt from 'bcrypt';
 import { Repository } from 'typeorm';
 
 import { CreateUserDto } from './dto/create-user.dto';
@@ -11,26 +12,42 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
-  ) {}
+  ) { }
 
-  // Create a new user in the database
-  async create(createUserDto: CreateUserDto): Promise<User> {
+  // Remove sensitive data before returning the user to the client
+  private sanitizeUser(user: User) {
+    const { passwordHash, ...safeUser } = user;
+
+    return safeUser;
+  }
+
+  // Create a new user
+  async create(createUserDto: CreateUserDto) {
+    // Hash the plain password before saving it
+    const passwordHash = await bcrypt.hash(createUserDto.password, 10);
+
     const user = this.usersRepository.create({
       fullName: createUserDto.fullName,
       email: createUserDto.email,
-      passwordHash: createUserDto.password,
+      passwordHash,
     });
 
-    return this.usersRepository.save(user);
+    const savedUser = await this.usersRepository.save(user);
+
+    // Return user data without passwordHash
+    return this.sanitizeUser(savedUser);
   }
 
-  // Get all users from the database
-  async findAll(): Promise<User[]> {
-    return this.usersRepository.find();
+  // Get all users
+  async findAll() {
+    const users = await this.usersRepository.find();
+
+    // Remove passwordHash from every user
+    return users.map((user) => this.sanitizeUser(user));
   }
 
   // Get one user by ID
-  async findOne(id: number): Promise<User> {
+  async findOne(id: number) {
     const user = await this.usersRepository.findOne({
       where: { id },
     });
@@ -39,24 +56,48 @@ export class UsersService {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
 
-    return user;
+    return this.sanitizeUser(user);
   }
 
-  // Update an existing user
-  async update(
-    id: number,
-    updateUserDto: UpdateUserDto,
-  ): Promise<User> {
-    const user = await this.findOne(id);
+  // Update user data
+  async update(id: number, updateUserDto: UpdateUserDto) {
+    const user = await this.usersRepository.findOne({
+      where: { id },
+    });
 
-    Object.assign(user, updateUserDto);
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
 
-    return this.usersRepository.save(user);
+    // Update normal fields only if they were provided
+    if (updateUserDto.fullName !== undefined) {
+      user.fullName = updateUserDto.fullName;
+    }
+
+    if (updateUserDto.email !== undefined) {
+      user.email = updateUserDto.email;
+    }
+
+    // If a new password was provided, hash it before saving
+    if (updateUserDto.password !== undefined) {
+      user.passwordHash = await bcrypt.hash(updateUserDto.password, 10);
+    }
+
+    const updatedUser = await this.usersRepository.save(user);
+
+    // Return updated user without passwordHash
+    return this.sanitizeUser(updatedUser);
   }
 
-  // Delete a user from the database
+  // Delete user
   async remove(id: number): Promise<void> {
-    const user = await this.findOne(id);
+    const user = await this.usersRepository.findOne({
+      where: { id },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
 
     await this.usersRepository.remove(user);
   }

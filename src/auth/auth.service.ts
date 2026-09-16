@@ -4,6 +4,7 @@ import {
 } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
+import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { Repository } from 'typeorm';
 
@@ -14,6 +15,8 @@ export class AuthService {
   constructor(
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
+
+    private readonly jwtService: JwtService,
   ) {}
 
   async validateUser(email: string, password: string) {
@@ -27,7 +30,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    // Compare the entered password with the hashed password
+    // Compare the entered password with the stored hash
     const isPasswordValid = await bcrypt.compare(
       password,
       user.passwordHash,
@@ -38,9 +41,23 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    // Never return passwordHash to the client
+    // Create JWT payload
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+    };
+
+    // Generate JWT token
+    const accessToken = await this.jwtService.signAsync(payload);
+
+    // Remove passwordHash from response
     const { passwordHash, ...safeUser } = user;
 
-    return safeUser;
+    // Return user data and token
+    return {
+      user: safeUser,
+      accessToken,
+    };
   }
 }

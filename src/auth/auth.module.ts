@@ -13,8 +13,13 @@ import { JwtStrategy } from './jwt.strategy';
 @Module({
   imports: [
     ConfigModule,
-    PassportModule,
+
+    PassportModule.register({
+      defaultStrategy: 'jwt',
+    }),
+
     TypeOrmModule.forFeature([User]),
+
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -26,8 +31,11 @@ import { JwtStrategy } from './jwt.strategy';
       }),
     }),
   ],
+
   controllers: [AuthController],
+
   providers: [AuthService, JwtStrategy],
+
   exports: [AuthService],
 })
 export class AuthModule {}

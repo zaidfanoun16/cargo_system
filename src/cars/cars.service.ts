@@ -4,12 +4,13 @@ import {
 } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { ILike, Repository } from 'typeorm';
 
 import { Car } from './entities/car.entity';
 import { CreateCarDto } from './dto/create-car.dto';
 import { UpdateCarDto } from './dto/update-car.dto';
 import { CarCategory } from '../car-categories/entities/car-category.entity';
+import { CarsQueryDto } from './dto/cars-query.dto'; 
 
 @Injectable()
 export class CarsService {
@@ -42,13 +43,39 @@ export class CarsService {
     return this.carsRepository.save(car);
   }
 
-  async findAll(): Promise<Car[]> {
-    return this.carsRepository.find({
-      relations: {
-        category: true,
-      },
-    });
-  }
+ async findAll(query: CarsQueryDto) {
+  const {
+    page = 1,
+    limit = 10,
+    brand,
+    model,
+    status,
+  } = query;
+
+  const [cars, total] = await this.carsRepository.findAndCount({
+    where: {
+      ...(brand && { brand: ILike(`%${brand}%`) }),
+      ...(model && { model: ILike(`%${model}%`) }),
+      ...(status && { status }),
+    },
+    relations: {
+      category: true,
+    },
+    skip: (page - 1) * limit,
+    take: limit,
+    order: {
+      createdAt: 'DESC',
+    },
+  });
+
+  return {
+    data: cars,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
+  };
+}
 
   async findOne(id: number): Promise<Car> {
     const car = await this.carsRepository.findOne({

@@ -10,6 +10,7 @@ import { Car } from './entities/car.entity';
 import { CreateCarDto } from './dto/create-car.dto';
 import { UpdateCarDto } from './dto/update-car.dto';
 import { CarCategory } from '../car-categories/entities/car-category.entity';
+import { CarStatus } from './enums/car-status.enum';
 
 @Injectable()
 export class CarsService {
@@ -19,7 +20,7 @@ export class CarsService {
 
     @InjectRepository(CarCategory)
     private readonly carCategoriesRepository: Repository<CarCategory>,
-  ) {}
+  ) { }
 
   async create(createCarDto: CreateCarDto): Promise<Car> {
     const { categoryId, ...carData } = createCarDto;
@@ -37,6 +38,7 @@ export class CarsService {
     const car = this.carsRepository.create({
       ...carData,
       category,
+      status: carData.status ?? CarStatus.AVAILABLE,
     });
 
     return this.carsRepository.save(car);

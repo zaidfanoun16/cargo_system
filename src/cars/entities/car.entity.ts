@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 
 import { CarCategory } from '../../car-categories/entities/car-category.entity';
+import { CarStatus } from '../enums/car-status.enum';
 
 @Entity('cars')
 export class Car {
@@ -33,8 +34,12 @@ export class Car {
   pricePerDay: number;
 
   // Current car status
-  @Column({ default: 'AVAILABLE' })
-  status: string;
+  @Column({
+    type: 'enum',
+    enum: CarStatus,
+    default: CarStatus.AVAILABLE,
+  })
+  status: CarStatus;
 
   // Each car belongs to one category
   @ManyToOne(() => CarCategory, (category) => category.cars, {

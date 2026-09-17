@@ -10,8 +10,8 @@ import { Car } from './entities/car.entity';
 import { CreateCarDto } from './dto/create-car.dto';
 import { UpdateCarDto } from './dto/update-car.dto';
 import { CarCategory } from '../car-categories/entities/car-category.entity';
-import { CarsQueryDto } from './dto/cars-query.dto'; 
-
+import { CarStatus } from './enums/car-status.enum';
+import { CarsQueryDto } from './dto/cars-query.dto';
 @Injectable()
 export class CarsService {
   constructor(
@@ -20,7 +20,7 @@ export class CarsService {
 
     @InjectRepository(CarCategory)
     private readonly carCategoriesRepository: Repository<CarCategory>,
-  ) {}
+  ) { }
 
   async create(createCarDto: CreateCarDto): Promise<Car> {
     const { categoryId, ...carData } = createCarDto;
@@ -38,44 +38,45 @@ export class CarsService {
     const car = this.carsRepository.create({
       ...carData,
       category,
+      status: carData.status ?? CarStatus.AVAILABLE,
     });
 
     return this.carsRepository.save(car);
   }
 
- async findAll(query: CarsQueryDto) {
-  const {
-    page = 1,
-    limit = 10,
-    brand,
-    model,
-    status,
-  } = query;
+  async findAll(query: CarsQueryDto) {
+    const {
+      page = 1,
+      limit = 10,
+      brand,
+      model,
+      status,
+    } = query;
 
-  const [cars, total] = await this.carsRepository.findAndCount({
-    where: {
-      ...(brand && { brand: ILike(`%${brand}%`) }),
-      ...(model && { model: ILike(`%${model}%`) }),
-      ...(status && { status }),
-    },
-    relations: {
-      category: true,
-    },
-    skip: (page - 1) * limit,
-    take: limit,
-    order: {
-      createdAt: 'DESC',
-    },
-  });
+    const [cars, total] = await this.carsRepository.findAndCount({
+      where: {
+        ...(brand && { brand: ILike(`%${brand}%`) }),
+        ...(model && { model: ILike(`%${model}%`) }),
+        ...(status && { status }),
+      },
+      relations: {
+        category: true,
+      },
+      skip: (page - 1) * limit,
+      take: limit,
+      order: {
+        createdAt: 'DESC',
+      },
+    });
 
-  return {
-    data: cars,
-    total,
-    page,
-    limit,
-    totalPages: Math.ceil(total / limit),
-  };
-}
+    return {
+      data: cars,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
 
   async findOne(id: number): Promise<Car> {
     const car = await this.carsRepository.findOne({

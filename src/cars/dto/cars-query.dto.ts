@@ -6,7 +6,7 @@ import {
   IsString,
   Min,
 } from 'class-validator';
-
+import { CarStatus } from '../enums/car-status.enum';
 export class CarsQueryDto {
   @IsOptional()
   @Type(() => Number)
@@ -30,5 +30,5 @@ export class CarsQueryDto {
 
   @IsOptional()
   @IsIn(['AVAILABLE', 'RENTED', 'MAINTENANCE'])
-  status?: string;
+  status?: CarStatus;
 }

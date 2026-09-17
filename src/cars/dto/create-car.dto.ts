@@ -1,13 +1,16 @@
 import {
-  IsIn,
+  IsEnum,
   IsInt,
   IsNotEmpty,
   IsNumber,
+  IsOptional,
   IsString,
   Max,
   MaxLength,
   Min,
 } from 'class-validator';
+
+import { CarStatus } from '../enums/car-status.enum';
 
 export class CreateCarDto {
   @IsString()
@@ -29,10 +32,9 @@ export class CreateCarDto {
   @Min(0)
   pricePerDay: number;
 
-  @IsString()
-  @IsNotEmpty()
-  @IsIn(['AVAILABLE', 'RENTED', 'MAINTENANCE'])
-  status: string;
+  @IsOptional()
+  @IsEnum(CarStatus)
+  status?: CarStatus;
 
   @IsInt()
   @Min(1)

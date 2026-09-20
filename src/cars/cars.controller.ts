@@ -8,36 +8,46 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 
 import { CarsService } from './cars.service';
 import { CreateCarDto } from './dto/create-car.dto';
 import { UpdateCarDto } from './dto/update-car.dto';
-  import { CarsQueryDto } from './dto/cars-query.dto'; 
+import { CarsQueryDto } from './dto/cars-query.dto';
+
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
 
 @Controller('cars')
 export class CarsController {
-  constructor(private readonly carsService: CarsService) {}
+  constructor(private readonly carsService: CarsService) { }
 
-  // POST /cars
+  // POST /cars - Admin only
   @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   create(@Body() createCarDto: CreateCarDto) {
     return this.carsService.create(createCarDto);
   }
 
- @Get()
-findAll(@Query() query: CarsQueryDto) {
-  return this.carsService.findAll(query);
-}
+  // GET /cars - Public
+  @Get()
+  findAll(@Query() query: CarsQueryDto) {
+    return this.carsService.findAll(query);
+  }
 
-  // GET /cars/:id
+  // GET /cars/:id - Public
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.carsService.findOne(id);
   }
 
-  // PATCH /cars/:id
+  // PATCH /cars/:id - Admin only
   @Patch(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateCarDto: UpdateCarDto,
@@ -45,8 +55,10 @@ findAll(@Query() query: CarsQueryDto) {
     return this.carsService.update(id, updateCarDto);
   }
 
-  // DELETE /cars/:id
+  // DELETE /cars/:id - Admin only
   @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.carsService.remove(id);
   }

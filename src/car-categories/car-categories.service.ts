@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -9,13 +10,17 @@ import { Repository } from 'typeorm';
 import { CarCategory } from './entities/car-category.entity';
 import { CreateCarCategoryDto } from './dto/create-car-category.dto';
 import { UpdateCarCategoryDto } from './dto/update-car-category.dto';
+import { Car } from '../cars/entities/car.entity';
 
 @Injectable()
 export class CarCategoriesService {
   constructor(
     @InjectRepository(CarCategory)
     private readonly carCategoriesRepository: Repository<CarCategory>,
-  ) {}
+
+    @InjectRepository(Car)
+    private readonly carsRepository: Repository<Car>,
+  ) { }
 
   async create(
     createCarCategoryDto: CreateCarCategoryDto,
@@ -58,6 +63,20 @@ export class CarCategoriesService {
 
   async remove(id: number): Promise<void> {
     const category = await this.findOne(id);
+
+    const carsCount = await this.carsRepository.count({
+      where: {
+        category: {
+          id,
+        },
+      },
+    });
+
+    if (carsCount > 0) {
+      throw new ConflictException(
+        'Cannot delete category because it contains cars.',
+      );
+    }
 
     await this.carCategoriesRepository.remove(category);
   }

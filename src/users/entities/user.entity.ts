@@ -24,7 +24,8 @@ export class User {
   @Column()
   passwordHash: string;
 
-  
+  @Column({ type: 'text', nullable: true })
+  refreshToken: string | null;
 
   // Role will be used later for authorization.
   @Column({ default: 'USER' })

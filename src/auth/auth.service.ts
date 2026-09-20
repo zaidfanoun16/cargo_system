@@ -19,7 +19,7 @@ export class AuthService {
     private readonly usersRepository: Repository<User>,
 
     private readonly jwtService: JwtService,
-  ) {}
+  ) { }
 
   async register(createUserDto: CreateUserDto) {
     // Check if the email is already registered
@@ -72,23 +72,75 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    // Create JWT payload
-    const payload = {
-      sub: user.id,
-      email: user.email,
-      role: user.role,
-    };
+    // Generate access token
+    const accessToken = await this.jwtService.signAsync(
+      {
+        sub: user.id,
+        email: user.email,
+        role: user.role,
+      },
+      {
+        expiresIn: '1d',
+      },
+    );
 
-    // Generate JWT token
-    const accessToken = await this.jwtService.signAsync(payload);
+    // Generate refresh token
+    const refreshToken = await this.jwtService.signAsync(
+      {
+        sub: user.id,
+      },
+      {
+        expiresIn: '7d',
+      },
+    );
 
-    // Remove passwordHash from response
-    const { passwordHash, ...safeUser } = user;
+    // Store the refresh token in the database
+    user.refreshToken = refreshToken;
+    await this.usersRepository.save(user);
 
-    // Return user data and token
+    // Remove passwordHash and refresh token from response
+    const { passwordHash, refreshToken: _, ...safeUser } = user;
+
+    // Return user data and tokens
     return {
       user: safeUser,
       accessToken,
+      refreshToken,
     };
   }
+  async refreshAccessToken(refreshToken: string) {
+  // Verify the refresh token
+  const payload = await this.jwtService.verifyAsync(refreshToken);
+
+  // Find the user
+  const user = await this.usersRepository.findOne({
+    where: { id: payload.sub },
+  });
+
+  // Reject if the user does not exist
+  if (!user) {
+    throw new UnauthorizedException('Invalid refresh token');
+  }
+
+  // Make sure the provided token matches the stored token
+  if (user.refreshToken !== refreshToken) {
+    throw new UnauthorizedException('Invalid refresh token');
+  }
+
+  // Generate a new access token
+  const accessToken = await this.jwtService.signAsync(
+    {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+    },
+    {
+      expiresIn: '1d',
+    },
+  );
+
+  return {
+    accessToken,
+  };
+}
 }

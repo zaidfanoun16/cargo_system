@@ -18,6 +18,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 
 @Controller('users')
 export class UsersController {
@@ -38,9 +39,42 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get('profile')
+  getProfile(@Req() request: Request) {
+    const currentUser = request.user as {
+      userId: number;
+      email: string;
+      role: string;
+    };
+
+    return this.usersService.findOne(currentUser.userId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.usersService.findOne(id);
+  }
+
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('profile')
+  updateProfile(
+    @Body() updateUserDto: UpdateUserDto,
+    @Req() request: Request,
+  ) {
+    const currentUser = request.user as {
+      userId: number;
+      email: string;
+      role: string;
+    };
+
+    return this.usersService.update(
+      currentUser.userId,
+      updateUserDto,
+      currentUser,
+    );
   }
 
   @UseGuards(JwtAuthGuard)
@@ -76,5 +110,18 @@ export class UsersController {
     };
 
     return this.usersService.remove(id, currentUser);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @Patch(':id/role')
+  updateRole(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateUserRoleDto: UpdateUserRoleDto,
+  ) {
+    return this.usersService.updateRole(
+      id,
+      updateUserRoleDto,
+    );
   }
 }

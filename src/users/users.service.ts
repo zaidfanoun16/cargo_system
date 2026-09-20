@@ -22,11 +22,15 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
-  ) {}
+  ) { }
 
   // Remove sensitive data before returning the user to the client
   private sanitizeUser(user: User) {
-    const { passwordHash, ...safeUser } = user;
+    const {
+      passwordHash,
+      refreshToken,
+      ...safeUser
+    } = user;
 
     return safeUser;
   }
@@ -114,6 +118,26 @@ export class UsersService {
     const updatedUser = await this.usersRepository.save(user);
 
     // Return updated user without passwordHash
+    return this.sanitizeUser(updatedUser);
+  }
+
+  // Update user role (ADMIN only)
+  async updateRole(
+    id: number,
+    updateUserRoleDto: { role: 'USER' | 'ADMIN' },
+  ) {
+    const user = await this.usersRepository.findOne({
+      where: { id },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
+
+    user.role = updateUserRoleDto.role;
+
+    const updatedUser = await this.usersRepository.save(user);
+
     return this.sanitizeUser(updatedUser);
   }
 

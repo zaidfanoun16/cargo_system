@@ -11,7 +11,7 @@ import {
 } from 'class-validator';
 
 import { CarStatus } from '../enums/car-status.enum';
-
+import { IsPositive } from 'class-validator';
 export class CreateCarDto {
   @IsString()
   @IsNotEmpty()
@@ -23,13 +23,18 @@ export class CreateCarDto {
   @MaxLength(100)
   model: string;
 
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(50)
+  licensePlate: string;
+
   @IsInt()
   @Min(1900)
   @Max(new Date().getFullYear() + 1)
   year: number;
 
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0)
+  @IsNumber()
+  @IsPositive()
   pricePerDay: number;
 
   @IsOptional()
@@ -39,4 +44,9 @@ export class CreateCarDto {
   @IsInt()
   @Min(1)
   categoryId: number;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(100)
+  color: string;
 }

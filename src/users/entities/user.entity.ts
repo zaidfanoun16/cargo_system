@@ -24,6 +24,8 @@ export class User {
   @Column()
   passwordHash: string;
 
+  
+
   // Role will be used later for authorization.
   @Column({ default: 'USER' })
   role: string;

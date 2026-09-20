@@ -9,6 +9,7 @@ import { UsersModule } from './users/users.module';
 import { CarCategoriesModule } from './car-categories/car-categories.module';
 import { CarsModule } from './cars/cars.module';
 import { AuthModule } from './auth/auth.module';
+import { ReservationsModule } from './reservations/reservations.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { AuthModule } from './auth/auth.module';
     CarCategoriesModule,
     CarsModule,
     AuthModule,
+    ReservationsModule,
   ],
 
   controllers: [AppController],

@@ -20,6 +20,18 @@ export class User {
   @Column({ unique: true, length: 150 })
   email: string;
 
+  // Email verification status.
+  @Column({ default: false })
+  isEmailVerified: boolean;
+
+  // Token used to verify the user's email.
+  @Column({ type: 'text', nullable: true })
+  emailVerificationToken: string | null;
+
+  // Expiration time for the email verification token.
+  @Column({ type: 'timestamp', nullable: true })
+  emailVerificationExpiresAt: Date | null;
+
   // Store only the hashed password, never the plain password.
   @Column()
   passwordHash: string;

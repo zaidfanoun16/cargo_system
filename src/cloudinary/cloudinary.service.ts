@@ -1,6 +1,6 @@
 import {
+  BadGatewayException,
   Injectable,
-  InternalServerErrorException,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -46,10 +46,8 @@ export class CloudinaryService {
             error || !response ? reject(error) : resolve(response),
         )
         .end(file.buffer);
-    }).catch((error: { message?: string }) => {
-      throw new InternalServerErrorException(
-        `Failed to upload image: ${error?.message ?? 'unknown error'}`,
-      );
+    }).catch((error: CloudinaryError) => {
+      throw this.toBadGateway('upload', error);
     });
 
     return {
@@ -61,7 +59,28 @@ export class CloudinaryService {
   async deleteImage(publicId: string) {
     this.ensureConfigured();
 
-    await cloudinary.uploader.destroy(publicId);
+    try {
+      await cloudinary.uploader.destroy(publicId);
+    } catch (error) {
+      throw this.toBadGateway('delete', error as CloudinaryError);
+    }
+  }
+
+  // Cloudinary failed, not this app: answer 502 and explain the usual
+  // causes, which the SDK's own message ("unexpected status code") hides
+  private toBadGateway(action: string, error: CloudinaryError) {
+    const status = error?.http_code;
+
+    const hint =
+      status === 401
+        ? ' Check CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET.'
+        : status === 403
+          ? ' The API key may be missing permissions: give it a role that can upload and delete assets in Cloudinary.'
+          : '';
+
+    return new BadGatewayException(
+      `Cloudinary could not ${action} the image${status ? ` (HTTP ${status})` : ''}: ${error?.message ?? 'unknown error'}.${hint}`,
+    );
   }
 
   private ensureConfigured() {
@@ -72,3 +91,5 @@ export class CloudinaryService {
     }
   }
 }
+
+type CloudinaryError = { message?: string; http_code?: number };

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -9,6 +10,7 @@ import * as bcrypt from 'bcrypt';
 import { Repository } from 'typeorm';
 
 import { UpdateUserDto } from './dto/update-user.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { User } from './entities/user.entity';
 import { Reservation } from '../reservations/entities/reservation.entity';
 
@@ -97,18 +99,49 @@ export class UsersService {
       user.email = updateUserDto.email;
     }
 
-    // If a new password was provided, hash it before saving
-    if (updateUserDto.password !== undefined) {
-      user.passwordHash = await bcrypt.hash(
-        updateUserDto.password,
-        10,
-      );
-    }
-
     const updatedUser = await this.usersRepository.save(user);
 
     // Return updated user without passwordHash
     return this.sanitizeUser(updatedUser);
+  }
+
+  // Change the current user's password (requires the current password)
+  async changePassword(
+    userId: number,
+    changePasswordDto: ChangePasswordDto,
+  ) {
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${userId} not found`);
+    }
+
+    // Someone using an unattended logged-in session must not be able to
+    // take over the account
+    const isCurrentPasswordValid = await bcrypt.compare(
+      changePasswordDto.currentPassword,
+      user.passwordHash,
+    );
+
+    if (!isCurrentPasswordValid) {
+      throw new BadRequestException('Current password is incorrect');
+    }
+
+    user.passwordHash = await bcrypt.hash(
+      changePasswordDto.newPassword,
+      10,
+    );
+
+    // Sign out other sessions: their refresh token stops working
+    user.refreshToken = null;
+
+    await this.usersRepository.save(user);
+
+    return {
+      message: 'Password changed successfully',
+    };
   }
 
   // Update user role (ADMIN only)

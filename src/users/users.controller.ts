@@ -14,6 +14,7 @@ import type { Request } from 'express';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
@@ -66,6 +67,24 @@ export class UsersController {
       currentUser.userId,
       updateUserDto,
       currentUser,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('profile/password')
+  changePassword(
+    @Body() changePasswordDto: ChangePasswordDto,
+    @Req() request: Request,
+  ) {
+    const currentUser = request.user as {
+      userId: number;
+      email: string;
+      role: string;
+    };
+
+    return this.usersService.changePassword(
+      currentUser.userId,
+      changePasswordDto,
     );
   }
 

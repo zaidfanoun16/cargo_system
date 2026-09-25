@@ -1,4 +1,8 @@
-import { PartialType } from '@nestjs/mapped-types';
+import { PartialType, PickType } from '@nestjs/mapped-types';
 import { CreateUserDto } from './create-user.dto';
 
-export class UpdateUserDto extends PartialType(CreateUserDto) {}
+// Password has its own endpoint (PATCH /users/profile/password) because
+// changing it requires the current password
+export class UpdateUserDto extends PartialType(
+  PickType(CreateUserDto, ['fullName', 'email'] as const),
+) {}

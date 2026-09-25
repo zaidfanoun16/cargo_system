@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
 import { User } from './entities/user.entity';
 import { Reservation } from '../reservations/entities/reservation.entity';
 import { UsersService } from './users.service';
@@ -12,6 +13,7 @@ describe('UsersService', () => {
     find: jest.fn(),
     findOne: jest.fn(),
     remove: jest.fn(),
+    save: jest.fn(),
   };
   const reservationsRepository = { count: jest.fn() };
 
@@ -86,6 +88,41 @@ describe('UsersService', () => {
         ConflictException,
       );
       expect(usersRepository.remove).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('changePassword', () => {
+    let user: { id: number; passwordHash: string; refreshToken: string | null };
+
+    beforeEach(async () => {
+      user = {
+        id: 1,
+        passwordHash: await bcrypt.hash('oldPassword1', 4),
+        refreshToken: 'refresh-token',
+      };
+      usersRepository.findOne.mockResolvedValue(user);
+    });
+
+    it('changes the password when the current one is correct', async () => {
+      await service.changePassword(1, {
+        currentPassword: 'oldPassword1',
+        newPassword: 'newPassword1',
+      });
+
+      expect(await bcrypt.compare('newPassword1', user.passwordHash)).toBe(true);
+      // Other sessions are signed out
+      expect(user.refreshToken).toBeNull();
+      expect(usersRepository.save).toHaveBeenCalled();
+    });
+
+    it('rejects a wrong current password', async () => {
+      await expect(
+        service.changePassword(1, {
+          currentPassword: 'wrongPassword',
+          newPassword: 'newPassword1',
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(usersRepository.save).not.toHaveBeenCalled();
     });
   });
 });

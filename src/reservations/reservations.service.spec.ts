@@ -183,7 +183,13 @@ describe('ReservationsService', () => {
   });
 
   describe('expirePendingReservations', () => {
+    // Freeze the clock so the time limits can be checked exactly
+    const now = new Date('2030-01-15T12:00:00Z');
+
+    afterEach(() => jest.useRealTimers());
+
     beforeEach(() => {
+      jest.useFakeTimers({ now });
       reservationsRepository.save.mockImplementation(async (r) => r);
       reservationsRepository.findOne.mockResolvedValue(null);
     });
@@ -203,7 +209,6 @@ describe('ReservationsService', () => {
 
     it('looks for reservations older than 24 hours or already started', async () => {
       reservationsRepository.find.mockResolvedValue([]);
-      const before = Date.now();
 
       await service.expirePendingReservations();
 
@@ -214,10 +219,8 @@ describe('ReservationsService', () => {
 
       expect(byAge.status).toBe('PENDING');
       expect(byStart.status).toBe('PENDING');
-      expect(before - createdBefore.getTime()).toBeGreaterThanOrEqual(
-        24 * 60 * 60 * 1000,
-      );
-      expect(startedBy.getTime()).toBeGreaterThanOrEqual(before);
+      expect(createdBefore).toEqual(new Date('2030-01-14T12:00:00Z'));
+      expect(startedBy).toEqual(now);
     });
   });
 });

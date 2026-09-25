@@ -23,6 +23,17 @@ export class CreateCarDto {
   @MaxLength(100)
   model: string;
 
+  // Arabic names, e.g. تويوتا / كورولا
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  brandAr?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  modelAr?: string;
+
   @IsString()
   @IsNotEmpty()
   @MaxLength(50)
@@ -55,4 +66,10 @@ export class CreateCarDto {
   @IsNotEmpty()
   @MaxLength(100)
   color: string;
+
+  // Arabic color, e.g. أبيض
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  colorAr?: string;
 }

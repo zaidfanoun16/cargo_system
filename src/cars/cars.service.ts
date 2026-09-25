@@ -7,6 +7,7 @@ import {
 
 import { InjectRepository } from '@nestjs/typeorm';
 import {
+  FindOptionsWhere,
   ILike,
   In,
   LessThan,
@@ -90,22 +91,37 @@ export class CarsService {
       status,
     );
 
+    // Brand and model match either the English or the Arabic name, so each
+    // one becomes a list of alternatives that are OR-ed together
+    const brandOptions: FindOptionsWhere<Car>[] = brand
+      ? [{ brand: ILike(`%${brand}%`) }, { brandAr: ILike(`%${brand}%`) }]
+      : [{}];
+    const modelOptions: FindOptionsWhere<Car>[] = model
+      ? [{ model: ILike(`%${model}%`) }, { modelAr: ILike(`%${model}%`) }]
+      : [{}];
+
+    const baseWhere: FindOptionsWhere<Car> = {
+      ...(status && { status }),
+      // Searching by dates only returns cars that can be reserved
+      ...(reservedCarIds && {
+        status: CarStatus.AVAILABLE,
+        id: Not(In(reservedCarIds)),
+      }),
+      ...(categoryId && {
+        category: {
+          id: categoryId,
+        },
+      }),
+    };
+
     const [cars, total] = await this.carsRepository.findAndCount({
-      where: {
-        ...(brand && { brand: ILike(`%${brand}%`) }),
-        ...(model && { model: ILike(`%${model}%`) }),
-        ...(status && { status }),
-        // Searching by dates only returns cars that can be reserved
-        ...(reservedCarIds && {
-          status: CarStatus.AVAILABLE,
-          id: Not(In(reservedCarIds)),
-        }),
-        ...(categoryId && {
-          category: {
-            id: categoryId,
-          },
-        }),
-      },
+      where: brandOptions.flatMap((brandWhere) =>
+        modelOptions.map((modelWhere) => ({
+          ...baseWhere,
+          ...brandWhere,
+          ...modelWhere,
+        })),
+      ),
       relations: {
         category: true,
         images: true,
@@ -174,10 +190,7 @@ export class CarsService {
     const reservations = await this.reservationsRepository.find({
       select: { carId: true },
       where: {
-        status: In([
-          ReservationStatus.PENDING,
-          ReservationStatus.CONFIRMED,
-        ]),
+        status: In([ReservationStatus.PENDING, ReservationStatus.CONFIRMED]),
         startDate: LessThan(end),
         endDate: MoreThan(start),
       },
@@ -224,10 +237,7 @@ export class CarsService {
       select: { startDate: true, endDate: true, status: true },
       where: {
         carId: id,
-        status: In([
-          ReservationStatus.PENDING,
-          ReservationStatus.CONFIRMED,
-        ]),
+        status: In([ReservationStatus.PENDING, ReservationStatus.CONFIRMED]),
         startDate: LessThan(monthEnd),
         endDate: MoreThan(monthStart),
       },
@@ -266,10 +276,7 @@ export class CarsService {
     };
   }
 
-  async update(
-    id: number,
-    updateCarDto: UpdateCarDto,
-  ): Promise<Car> {
+  async update(id: number, updateCarDto: UpdateCarDto): Promise<Car> {
     const car = await this.findOne(id);
 
     const { categoryId, ...carData } = updateCarDto;

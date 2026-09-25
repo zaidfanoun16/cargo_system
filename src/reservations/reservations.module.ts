@@ -11,32 +11,19 @@ import { Car } from '../cars/entities/car.entity';
 import { AuthModule } from '../auth/auth.module';
 import { EmailModule } from '../email/email.module';
 
-
 @Module({
-
   imports: [
-    TypeOrmModule.forFeature([
-      Reservation,
-      User,
-      Car,
-    ]),
+    TypeOrmModule.forFeature([Reservation, User, Car]),
 
     AuthModule,
 
     EmailModule,
   ],
 
-  controllers: [
-    ReservationsController,
-  ],
+  controllers: [ReservationsController],
 
-  providers: [
-    ReservationsService,
-  ],
+  providers: [ReservationsService],
 
-  exports: [
-    ReservationsService,
-  ],
-
+  exports: [ReservationsService],
 })
 export class ReservationsModule {}

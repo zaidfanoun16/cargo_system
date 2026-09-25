@@ -14,18 +14,14 @@ import { ReservationStatus } from '../enums/reservation-status.enum';
 
 @Entity('reservations')
 export class Reservation {
-
   @PrimaryGeneratedColumn()
   id: number;
-
 
   @Column()
   startDate: Date;
 
-
   @Column()
   endDate: Date;
-
 
   // Price before the duration discount.
   // PostgreSQL returns decimals as strings, so convert them to numbers.
@@ -40,11 +36,9 @@ export class Reservation {
   })
   basePrice: number;
 
-
   // Discount for long rentals, in percent (0, 10 or 20)
   @Column({ type: 'smallint', default: 0 })
   discountPercent: number;
-
 
   // Price the customer pays (basePrice minus the discount), fixed when the
   // reservation is created so later price changes do not affect it.
@@ -59,7 +53,6 @@ export class Reservation {
   })
   totalPrice: number;
 
-
   @Column({
     type: 'enum',
     enum: ReservationStatus,
@@ -67,30 +60,24 @@ export class Reservation {
   })
   status: ReservationStatus;
 
-
   // Reservation belongs to one user
   @ManyToOne(() => User)
   @JoinColumn({ name: 'userId' })
   user: User;
 
-
   @Column()
   userId: number;
-
 
   // Reservation belongs to one car
   @ManyToOne(() => Car)
   @JoinColumn({ name: 'carId' })
   car: Car;
 
-
   @Column()
   carId: number;
 
-
   @CreateDateColumn()
   createdAt: Date;
-
 
   @UpdateDateColumn()
   updatedAt: Date;

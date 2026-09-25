@@ -33,7 +33,10 @@ describe('ReservationsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ReservationsService,
-        { provide: getRepositoryToken(Reservation), useValue: reservationsRepository },
+        {
+          provide: getRepositoryToken(Reservation),
+          useValue: reservationsRepository,
+        },
         { provide: getRepositoryToken(User), useValue: {} },
         { provide: getRepositoryToken(Car), useValue: carsRepository },
         { provide: EmailService, useValue: emailService },
@@ -236,6 +239,86 @@ describe('ReservationsService', () => {
         discountPercent: 20,
         totalPrice: 799.92,
       });
+    });
+  });
+
+  describe('quote', () => {
+    beforeEach(() => {
+      carsRepository.findOne.mockResolvedValue({
+        id: 5,
+        pricePerDay: '100.00',
+        pricePerHour: '15.00',
+        status: 'AVAILABLE',
+      });
+    });
+
+    it('prices a free period without creating a reservation', async () => {
+      reservationsRepository.findOne.mockResolvedValue(null);
+
+      // 7 days at 100/day, minus 10%
+      await expect(
+        service.quote({
+          carId: 5,
+          startDate: '2030-10-01T10:00:00Z',
+          endDate: '2030-10-08T10:00:00Z',
+        }),
+      ).resolves.toMatchObject({
+        hours: 168,
+        available: true,
+        unavailableReason: null,
+        basePrice: 700,
+        discountPercent: 10,
+        totalPrice: 630,
+      });
+      expect(reservationsRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('still prices a reserved period but marks it unavailable', async () => {
+      reservationsRepository.findOne.mockResolvedValue({ id: 99 });
+
+      await expect(
+        service.quote({
+          carId: 5,
+          startDate: '2030-10-01T10:00:00Z',
+          endDate: '2030-10-01T13:00:00Z',
+        }),
+      ).resolves.toMatchObject({
+        hours: 3,
+        available: false,
+        unavailableReason: 'reserved',
+        totalPrice: 45,
+      });
+    });
+
+    it('marks a car in maintenance unavailable', async () => {
+      carsRepository.findOne.mockResolvedValue({
+        id: 5,
+        pricePerDay: '100.00',
+        pricePerHour: null,
+        status: 'MAINTENANCE',
+      });
+
+      await expect(
+        service.quote({
+          carId: 5,
+          startDate: '2030-10-01',
+          endDate: '2030-10-03',
+        }),
+      ).resolves.toMatchObject({
+        available: false,
+        unavailableReason: 'maintenance',
+        totalPrice: 200,
+      });
+    });
+
+    it('applies the same checks as booking', async () => {
+      await expect(
+        service.quote({
+          carId: 5,
+          startDate: '2030-10-01T10:00:00Z',
+          endDate: '2030-10-01T11:00:00Z',
+        }),
+      ).rejects.toThrow('at least 2 hours');
     });
   });
 

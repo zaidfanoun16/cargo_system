@@ -1,9 +1,4 @@
-import {
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  MaxLength,
-} from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class CreateCarCategoryDto {
   @IsString()
@@ -14,4 +9,14 @@ export class CreateCarCategoryDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  // Arabic name and description, e.g. دفع رباعي
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  nameAr?: string;
+
+  @IsOptional()
+  @IsString()
+  descriptionAr?: string;
 }

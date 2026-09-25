@@ -20,6 +20,13 @@ export class CarCategory {
   @Column({ type: 'text', nullable: true })
   description: string | null;
 
+  // Arabic name and description, shown when the site is in Arabic
+  @Column({ type: 'varchar', length: 100, nullable: true, unique: true })
+  nameAr: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  descriptionAr: string | null;
+
   // One category can contain many cars
   @OneToMany(() => Car, (car) => car.category)
   cars: Car[];

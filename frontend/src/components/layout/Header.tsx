@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 
 import { useAuth } from '../../hooks/useAuth'
+import { useConfirm } from '../../hooks/useConfirm'
+import { useToast } from '../../hooks/useToast'
 import { Container } from '../ui/Container'
 import { Logo } from './Logo'
 import { LanguageButton, ThemeButton } from './SettingsButtons'
@@ -48,6 +50,20 @@ export function Header() {
   const { pathname } = useLocation()
   const scrolled = useScrolled()
   const { user, logout } = useAuth()
+  const confirm = useConfirm()
+  const toast = useToast()
+
+  async function confirmLogout() {
+    setMenuOpen(false)
+    const confirmed = await confirm({
+      title: t('confirm.logoutTitle'),
+      message: t('confirm.logoutText'),
+      confirmLabel: t('nav.logout'),
+    })
+    if (!confirmed) return
+    logout()
+    toast.info(t('confirm.loggedOut'))
+  }
   const navLinks = user ? [...links, { to: '/my-bookings', key: 'nav.myBookings' } as const] : links
 
   // See-through over the home page photo until the page scrolls
@@ -92,7 +108,7 @@ export function Header() {
               </Link>
               <button
                 type="button"
-                onClick={logout}
+                onClick={confirmLogout}
                 className="grid size-10 place-items-center rounded-xl text-muted transition-colors hover:bg-surface-muted hover:text-text group-data-[hero=true]/header:text-white/75 group-data-[hero=true]/header:hover:bg-white/10 group-data-[hero=true]/header:hover:text-white"
                 aria-label={t('nav.logout')}
                 title={t('nav.logout')}
@@ -149,10 +165,7 @@ export function Header() {
               {user ? (
                 <button
                   type="button"
-                  onClick={() => {
-                    logout()
-                    closeMenu()
-                  }}
+                  onClick={confirmLogout}
                   className="inline-flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-muted hover:bg-surface-muted hover:text-text"
                 >
                   <LogOut className="size-5 rtl:-scale-x-100" aria-hidden />

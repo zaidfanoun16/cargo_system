@@ -6,10 +6,12 @@ import { Link, useLocation } from 'react-router-dom'
 import { FormAlert } from '../../components/form/FormAlert'
 import { Button } from '../../components/ui/Button'
 import { useAuth } from '../../hooks/useAuth'
+import { useConfirm } from '../../hooks/useConfirm'
 import { useFetch } from '../../hooks/useFetch'
+import { useToast } from '../../hooks/useToast'
 import { api } from '../../lib/api'
-import type { Car, Quote } from '../../lib/cars'
-import { addDays, atHour, formatHour, isValidDateInput, toDateInput } from '../../lib/dates'
+import { type Car, type Quote, carName } from '../../lib/cars'
+import { addDays, atHour, formatDate, formatHour, isValidDateInput, toDateInput } from '../../lib/dates'
 import { errorKey } from '../../lib/errors'
 import { formatNumber, formatPrice } from '../../lib/format'
 
@@ -33,6 +35,8 @@ export function BookingBox({ car, initialStart, initialEnd }: Props) {
   const { t, i18n } = useTranslation()
   const language = i18n.language
   const { user } = useAuth()
+  const confirm = useConfirm()
+  const toast = useToast()
   const location = useLocation()
 
   const tomorrow = toDateInput(addDays(new Date(), 1))
@@ -77,7 +81,24 @@ export function BookingBox({ car, initialStart, initialEnd }: Props) {
   const current = quotePath && !quote.loading ? quote.data : undefined
 
   async function book() {
-    if (!start || !end) return
+    if (!start || !end || !current) return
+
+    // Show exactly what is being booked before sending it
+    const when = (date: Date) => formatDate(date, language, { weekday: 'short', hour: 'numeric', minute: '2-digit' })
+    const confirmed = await confirm({
+      title: t('booking.confirmTitle'),
+      message: (
+        <dl className="mt-1 space-y-1.5 rounded-2xl bg-surface-muted/70 p-4 text-text">
+          <SummaryRow label={t('booking.car')} value={carName(car, language)} />
+          <SummaryRow label={t('booking.pickup')} value={when(start)} />
+          <SummaryRow label={t('booking.return')} value={when(end)} />
+          <SummaryRow label={t('booking.total')} value={formatPrice(current.totalPrice, language)} strong />
+        </dl>
+      ),
+      confirmLabel: t('booking.confirmButton'),
+    })
+    if (!confirmed) return
+
     setBooking(true)
     setBookError(undefined)
     try {
@@ -87,6 +108,7 @@ export function BookingBox({ car, initialStart, initialEnd }: Props) {
         body: { carId: car.id, startDate: start.toISOString(), endDate: end.toISOString() },
       })
       setBooked(reservation)
+      toast.success(t('booking.successTitle'))
     } catch (caught) {
       setBookError(errorKey(caught))
       quote.reload()
@@ -270,6 +292,15 @@ function PeriodRow({ label, children }: { label: string; children: ReactNode }) 
     <div>
       <p className="mb-1.5 text-sm font-semibold">{label}</p>
       <div className="grid grid-cols-[1fr_auto] gap-2 [&>select]:w-32">{children}</div>
+    </div>
+  )
+}
+
+function SummaryRow({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className={`flex justify-between gap-3 ${strong ? 'border-t border-border pt-1.5 text-base font-extrabold' : ''}`}>
+      <dt className={strong ? '' : 'text-muted'}>{label}</dt>
+      <dd className="text-end font-semibold">{value}</dd>
     </div>
   )
 }

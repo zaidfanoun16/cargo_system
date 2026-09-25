@@ -7,6 +7,7 @@ import { ReservationsService } from './reservations.service';
 import { Reservation } from './entities/reservation.entity';
 import { User } from '../users/entities/user.entity';
 import { Car } from '../cars/entities/car.entity';
+import { Review } from '../reviews/entities/review.entity';
 
 import { AuthModule } from '../auth/auth.module';
 import { EmailModule } from '../email/email.module';
@@ -19,6 +20,7 @@ import { EmailModule } from '../email/email.module';
       Reservation,
       User,
       Car,
+      Review,
     ]),
 
     AuthModule,

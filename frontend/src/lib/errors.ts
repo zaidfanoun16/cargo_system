@@ -20,6 +20,10 @@ const knownErrors: Record<string, string> = {
   'Car is currently under maintenance': 'booking.unavailable.maintenance',
   'Car is inactive and cannot be reserved': 'booking.unavailable.inactive',
   'Car not found': 'car.notFound',
+  'Reservation cannot be cancelled after the start date': 'bookings.errors.started',
+  'Only PENDING or CONFIRMED reservations can be cancelled': 'bookings.errors.notCancellable',
+  'Only completed reservations can be reviewed': 'reviews.errors.notCompleted',
+  'This reservation was already reviewed': 'reviews.errors.already',
 }
 
 export function errorKey(error: unknown): string {

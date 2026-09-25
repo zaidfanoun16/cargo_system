@@ -29,6 +29,12 @@ function load(): Session | null {
 
 let session = load()
 
+// When the user last logged out themselves (not a session that expired).
+// Right after that, pages for logged-in users send them home instead of
+// to the login page; a later visit to such a page asks to log in again.
+let loggedOutAt = 0
+const JUST_LOGGED_OUT_MS = 1000
+
 function save(next: Session | null) {
   session = next
 
@@ -48,7 +54,14 @@ function save(next: Session | null) {
 export const authStore = {
   get: () => session,
   set: (next: Session) => save(next),
+  // The session ended by itself, e.g. the refresh token expired
   clear: () => save(null),
+  // The user chose to log out
+  logout: () => {
+    loggedOutAt = Date.now()
+    save(null)
+  },
+  justLoggedOut: () => Date.now() - loggedOutAt < JUST_LOGGED_OUT_MS,
   updateAccessToken(accessToken: string) {
     if (session) save({ ...session, accessToken })
   },

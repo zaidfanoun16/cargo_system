@@ -1,4 +1,4 @@
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Reservation } from './entities/reservation.entity';
@@ -64,6 +64,33 @@ describe('ReservationsService', () => {
 
       await expect(service.create(dto, currentUser)).rejects.toBeInstanceOf(
         ConflictException,
+      );
+      expect(reservationsRepository.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('ownership', () => {
+    const otherUsersReservation = {
+      id: 7,
+      userId: 2,
+      status: 'PENDING',
+      startDate: new Date('2030-10-12'),
+      endDate: new Date('2030-10-18'),
+    };
+
+    it("forbids a user from viewing another user's reservation", async () => {
+      reservationsRepository.findOne.mockResolvedValue(otherUsersReservation);
+
+      await expect(service.getOne(7, 1, 'USER')).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+    });
+
+    it("forbids a user from cancelling another user's reservation", async () => {
+      reservationsRepository.findOne.mockResolvedValue(otherUsersReservation);
+
+      await expect(service.cancel(7, 1, 'USER')).rejects.toBeInstanceOf(
+        ForbiddenException,
       );
       expect(reservationsRepository.save).not.toHaveBeenCalled();
     });

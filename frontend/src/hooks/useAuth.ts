@@ -44,7 +44,7 @@ function resetPassword(email: string, code: string, newPassword: string) {
 
 // The backend keeps no session to end, so signing out forgets the tokens
 function logout() {
-  authStore.clear()
+  authStore.logout()
 }
 
 export function useAuth() {

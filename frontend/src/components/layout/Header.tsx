@@ -1,7 +1,7 @@
 import { Menu, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, NavLink, useLocation } from 'react-router-dom'
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 
 import { useAuth } from '../../hooks/useAuth'
 import { useConfirm } from '../../hooks/useConfirm'
@@ -46,6 +46,7 @@ export function Header() {
   const { pathname } = useLocation()
   const scrolled = useScrolled()
   const { user, logout } = useAuth()
+  const navigate = useNavigate()
   const confirm = useConfirm()
   const toast = useToast()
 
@@ -59,7 +60,10 @@ export function Header() {
       confirmLabel: t('nav.logout'),
     })
     if (!confirmed) return
+    // Back to the home page (pages for logged-in users do the same,
+    // see RequireAuth)
     logout()
+    navigate('/', { replace: true })
     toast.info(t('confirm.loggedOut'))
   }
 

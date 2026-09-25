@@ -1,0 +1,68 @@
+@import 'tailwindcss';
+
+/* Dark mode follows the "dark" class on <html>, set by the theme toggle */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Colors: charcoal grey (سكني) with white. Every component uses these
+   names, so light and dark mode only change the values below. */
+:root {
+  --bg: #f5f6f7;
+  --surface: #ffffff;
+  --surface-muted: #eef0f2;
+  --border: #e3e6e9;
+  --text: #1f2429;
+  --text-muted: #6b737b;
+  --primary: #3f4a54;
+  --primary-hover: #2e363e;
+  --primary-fg: #ffffff;
+  --primary-soft: #e6e9ec;
+}
+
+.dark {
+  --bg: #111315;
+  --surface: #1a1d20;
+  --surface-muted: #23272b;
+  --border: #2d3237;
+  --text: #e9ecef;
+  --text-muted: #9aa2a9;
+  --primary: #d3d8dd;
+  --primary-hover: #ffffff;
+  --primary-fg: #16191c;
+  --primary-soft: #2a2f34;
+}
+
+@theme inline {
+  --font-sans: 'Cairo Variable', ui-sans-serif, system-ui, sans-serif;
+
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-muted: var(--text-muted);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-fg: var(--primary-fg);
+  --color-primary-soft: var(--primary-soft);
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  /* Smooth scrolling for in-page links, unless the device asks for less motion */
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
+  }
+
+  body {
+    @apply min-h-dvh bg-bg font-sans text-text antialiased transition-colors;
+  }
+}

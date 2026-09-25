@@ -35,7 +35,10 @@ describe('ReservationsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ReservationsService,
-        { provide: getRepositoryToken(Reservation), useValue: reservationsRepository },
+        {
+          provide: getRepositoryToken(Reservation),
+          useValue: reservationsRepository,
+        },
         { provide: getRepositoryToken(User), useValue: {} },
         { provide: getRepositoryToken(Car), useValue: carsRepository },
         { provide: getRepositoryToken(Review), useValue: reviewsRepository },
@@ -364,8 +367,10 @@ describe('ReservationsService', () => {
     const withRelations = (status: string) => ({
       ...reservation,
       status,
+      basePrice: 300,
+      discountPercent: 0,
       user: { email: 'a@b.com', fullName: 'A' },
-      car: { brand: 'Toyota', model: 'Corolla' },
+      car: { brand: 'Toyota', model: 'Corolla', licensePlate: 'AB-1' },
     });
 
     beforeEach(() => {
@@ -388,6 +393,46 @@ describe('ReservationsService', () => {
           totalPrice: 300,
         }),
       );
+    });
+
+    it('uses the Arabic car name in the email when it is set', async () => {
+      reservationsRepository.findOne
+        .mockResolvedValueOnce({ ...reservation })
+        .mockResolvedValueOnce({
+          ...withRelations('CONFIRMED'),
+          car: {
+            brand: 'Toyota',
+            brandAr: 'تويوتا',
+            model: 'Corolla',
+            modelAr: 'كورولا',
+            licensePlate: 'AB-1',
+          },
+        });
+
+      await service.confirm(7);
+
+      expect(emailService.sendReservationStatus).toHaveBeenCalledWith(
+        'a@b.com',
+        expect.objectContaining({ car: 'تويوتا كورولا', licensePlate: 'AB-1' }),
+      );
+    });
+
+    it.each([
+      ['the customer', { userId: 1, role: 'USER' }, 'user'],
+      ['an admin', { userId: 9, role: 'ADMIN' }, 'admin'],
+    ])('tells the user when %s cancels', async (_who, by, cancelledBy) => {
+      jest.useFakeTimers({ now: new Date('2030-10-01T00:00:00Z') });
+      reservationsRepository.findOne
+        .mockResolvedValueOnce({ ...reservation })
+        .mockResolvedValueOnce(withRelations('CANCELLED'));
+
+      await service.cancel(7, by.userId, by.role);
+
+      expect(emailService.sendReservationStatus).toHaveBeenCalledWith(
+        'a@b.com',
+        expect.objectContaining({ status: 'CANCELLED', cancelledBy }),
+      );
+      jest.useRealTimers();
     });
 
     it('still confirms the reservation when the email fails', async () => {

@@ -3,7 +3,6 @@ import type ar from './ar'
 // Must have the same keys as the Arabic translations
 const en: typeof ar = {
   app: {
-    name: 'CarGo',
     tagline: 'Car rental made easy',
   },
   nav: {

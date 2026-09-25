@@ -1,7 +1,6 @@
 // Arabic is the default language
 const ar = {
   app: {
-    name: 'كارغو',
     tagline: 'تأجير سيارات بسهولة',
   },
   nav: {
@@ -25,7 +24,7 @@ const ar = {
     from: 'من',
     to: 'إلى',
     search: 'بحث',
-    featuresTitle: 'لماذا كارغو؟',
+    featuresTitle: 'لماذا CarGo؟',
     features: {
       availability: {
         title: 'سيارات متاحة فعلاً',

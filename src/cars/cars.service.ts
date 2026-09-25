@@ -14,6 +14,7 @@ import { CarsQueryDto } from './dto/cars-query.dto';
 import { CarCategory } from '../car-categories/entities/car-category.entity';
 import { CarStatus } from './enums/car-status.enum';
 import { Reservation } from '../reservations/entities/reservation.entity';
+import { ReviewsService } from '../reviews/reviews.service';
 
 @Injectable()
 export class CarsService {
@@ -26,6 +27,8 @@ export class CarsService {
 
     @InjectRepository(Reservation)
     private readonly reservationsRepository: Repository<Reservation>,
+
+    private readonly reviewsService: ReviewsService,
   ) {}
 
   async create(createCarDto: CreateCarDto): Promise<Car> {
@@ -81,13 +84,26 @@ export class CarsService {
       },
     });
 
+    const ratings = await this.reviewsService.getRatings(
+      cars.map((car) => car.id),
+    );
+
     return {
-      data: cars,
+      data: cars.map((car) => ({ ...car, ...ratings.get(car.id) })),
       total,
       page,
       limit,
       totalPages: Math.ceil(total / limit),
     };
+  }
+
+  // A car with its average rating and number of reviews
+  async findOneWithRating(id: number) {
+    const car = await this.findOne(id);
+
+    const ratings = await this.reviewsService.getRatings([id]);
+
+    return { ...car, ...ratings.get(id) };
   }
 
   async findOne(id: number): Promise<Car> {

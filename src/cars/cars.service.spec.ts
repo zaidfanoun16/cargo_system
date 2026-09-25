@@ -1,15 +1,21 @@
-import { ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
+import { In, Not } from 'typeorm';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Car } from './entities/car.entity';
 import { CarCategory } from '../car-categories/entities/car-category.entity';
 import { Reservation } from '../reservations/entities/reservation.entity';
 import { CarsService } from './cars.service';
+import { ReviewsService } from '../reviews/reviews.service';
 
 describe('CarsService', () => {
   let service: CarsService;
 
-  const carsRepository = { findOne: jest.fn(), remove: jest.fn() };
+  const carsRepository = {
+    findOne: jest.fn(),
+    remove: jest.fn(),
+    findAndCount: jest.fn(),
+  };
   const reservationsRepository = { count: jest.fn(), find: jest.fn() };
 
   beforeEach(async () => {
@@ -23,6 +29,10 @@ describe('CarsService', () => {
         {
           provide: getRepositoryToken(Reservation),
           useValue: reservationsRepository,
+        },
+        {
+          provide: ReviewsService,
+          useValue: { getRatings: async () => new Map() },
         },
       ],
     }).compile();
@@ -101,6 +111,52 @@ describe('CarsService', () => {
         bookedPeriods: [],
         bookedDates: [],
       });
+    });
+  });
+
+  describe('findAll by dates', () => {
+    beforeEach(() => {
+      carsRepository.findAndCount.mockResolvedValue([[], 0]);
+    });
+
+    const whereOfLastSearch = () =>
+      carsRepository.findAndCount.mock.calls[0][0].where;
+
+    it('excludes cars reserved in the period and unavailable cars', async () => {
+      reservationsRepository.find.mockResolvedValue([
+        { carId: 1 },
+        { carId: 2 },
+        { carId: 1 },
+      ]);
+
+      await service.findAll({
+        startDate: '2030-10-10',
+        endDate: '2030-10-15',
+      });
+
+      expect(whereOfLastSearch()).toMatchObject({
+        status: 'AVAILABLE',
+        id: Not(In([1, 2])),
+      });
+    });
+
+    it('does not filter by reservations without dates', async () => {
+      await service.findAll({});
+
+      expect(reservationsRepository.find).not.toHaveBeenCalled();
+      expect(whereOfLastSearch().id).toBeUndefined();
+    });
+
+    it('requires both dates', async () => {
+      await expect(
+        service.findAll({ startDate: '2030-10-10' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('requires endDate after startDate', async () => {
+      await expect(
+        service.findAll({ startDate: '2030-10-15', endDate: '2030-10-10' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 });

@@ -1,20 +1,24 @@
 import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Reservation } from './entities/reservation.entity';
 import { User } from '../users/entities/user.entity';
 import { Car } from '../cars/entities/car.entity';
 import { ReservationsService } from './reservations.service';
+import { EmailService } from '../email/email.service';
 
 describe('ReservationsService', () => {
   let service: ReservationsService;
 
   const reservationsRepository = {
     findOne: jest.fn(),
+    find: jest.fn(),
     create: jest.fn(),
     save: jest.fn(),
   };
   const carsRepository = { findOne: jest.fn() };
+  const emailService = { sendReservationStatus: jest.fn() };
 
   const currentUser = { userId: 1, email: 'a@b.com', role: 'USER' };
   const dto = {
@@ -32,6 +36,8 @@ describe('ReservationsService', () => {
         { provide: getRepositoryToken(Reservation), useValue: reservationsRepository },
         { provide: getRepositoryToken(User), useValue: {} },
         { provide: getRepositoryToken(Car), useValue: carsRepository },
+        { provide: EmailService, useValue: emailService },
+        { provide: ConfigService, useValue: { get: () => undefined } },
       ],
     }).compile();
 
@@ -120,6 +126,101 @@ describe('ReservationsService', () => {
         ForbiddenException,
       );
       expect(reservationsRepository.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('status emails', () => {
+    const reservation = {
+      id: 7,
+      userId: 1,
+      status: 'PENDING',
+      startDate: new Date('2030-10-12'),
+      endDate: new Date('2030-10-18'),
+      totalPrice: 300,
+    };
+
+    const withRelations = (status: string) => ({
+      ...reservation,
+      status,
+      user: { email: 'a@b.com', fullName: 'A' },
+      car: { brand: 'Toyota', model: 'Corolla' },
+    });
+
+    beforeEach(() => {
+      reservationsRepository.save.mockImplementation(async (r) => r);
+    });
+
+    it('emails the user when a reservation is confirmed', async () => {
+      reservationsRepository.findOne
+        .mockResolvedValueOnce({ ...reservation })
+        .mockResolvedValueOnce(withRelations('CONFIRMED'));
+
+      await service.confirm(7);
+
+      expect(emailService.sendReservationStatus).toHaveBeenCalledWith(
+        'a@b.com',
+        expect.objectContaining({
+          reservationId: 7,
+          status: 'CONFIRMED',
+          car: 'Toyota Corolla',
+          totalPrice: 300,
+        }),
+      );
+    });
+
+    it('still confirms the reservation when the email fails', async () => {
+      reservationsRepository.findOne
+        .mockResolvedValueOnce({ ...reservation })
+        .mockResolvedValueOnce(withRelations('CONFIRMED'));
+      emailService.sendReservationStatus.mockRejectedValue(
+        new Error('Resend is down'),
+      );
+
+      await expect(service.confirm(7)).resolves.toMatchObject({
+        status: 'CONFIRMED',
+      });
+    });
+  });
+
+  describe('expirePendingReservations', () => {
+    // Freeze the clock so the time limits can be checked exactly
+    const now = new Date('2030-01-15T12:00:00Z');
+
+    afterEach(() => jest.useRealTimers());
+
+    beforeEach(() => {
+      jest.useFakeTimers({ now });
+      reservationsRepository.save.mockImplementation(async (r) => r);
+      reservationsRepository.findOne.mockResolvedValue(null);
+    });
+
+    it('cancels expired PENDING reservations', async () => {
+      const expired = [
+        { id: 1, status: 'PENDING' },
+        { id: 2, status: 'PENDING' },
+      ];
+      reservationsRepository.find.mockResolvedValue(expired);
+
+      await expect(service.expirePendingReservations()).resolves.toBe(2);
+
+      expect(expired.every((r) => r.status === 'CANCELLED')).toBe(true);
+      expect(reservationsRepository.save).toHaveBeenCalledTimes(2);
+    });
+
+    it('looks for reservations older than 24 hours or already started', async () => {
+      reservationsRepository.find.mockResolvedValue([]);
+
+      await service.expirePendingReservations();
+
+      const [byAge, byStart] =
+        reservationsRepository.find.mock.calls[0][0].where;
+      const createdBefore: Date = byAge.createdAt.value;
+      const startedBy: Date = byStart.startDate.value;
+
+      expect(byAge.status).toBe('PENDING');
+      expect(byStart.status).toBe('PENDING');
+      expect(createdBefore).toEqual(new Date('2030-01-14T12:00:00Z'));
+      expect(startedBy).toEqual(now);
     });
   });
 });

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -10,6 +11,7 @@ import {
   In,
   LessThan,
   MoreThan,
+  Not,
   Repository,
 } from 'typeorm';
 
@@ -21,6 +23,7 @@ import { CarCategory } from '../car-categories/entities/car-category.entity';
 import { CarStatus } from './enums/car-status.enum';
 import { Reservation } from '../reservations/entities/reservation.entity';
 import { ReservationStatus } from '../reservations/enums/reservation-status.enum';
+import { ReviewsService } from '../reviews/reviews.service';
 
 @Injectable()
 export class CarsService {
@@ -33,6 +36,8 @@ export class CarsService {
 
     @InjectRepository(Reservation)
     private readonly reservationsRepository: Repository<Reservation>,
+
+    private readonly reviewsService: ReviewsService,
   ) {}
 
   async create(createCarDto: CreateCarDto): Promise<Car> {
@@ -65,13 +70,26 @@ export class CarsService {
       model,
       status,
       categoryId,
+      startDate,
+      endDate,
     } = query;
+
+    const reservedCarIds = await this.findReservedCarIds(
+      startDate,
+      endDate,
+      status,
+    );
 
     const [cars, total] = await this.carsRepository.findAndCount({
       where: {
         ...(brand && { brand: ILike(`%${brand}%`) }),
         ...(model && { model: ILike(`%${model}%`) }),
         ...(status && { status }),
+        // Searching by dates only returns cars that can be reserved
+        ...(reservedCarIds && {
+          status: CarStatus.AVAILABLE,
+          id: Not(In(reservedCarIds)),
+        }),
         ...(categoryId && {
           category: {
             id: categoryId,
@@ -88,13 +106,72 @@ export class CarsService {
       },
     });
 
+    const ratings = await this.reviewsService.getRatings(
+      cars.map((car) => car.id),
+    );
+
     return {
-      data: cars,
+      data: cars.map((car) => ({ ...car, ...ratings.get(car.id) })),
       total,
       page,
       limit,
       totalPages: Math.ceil(total / limit),
     };
+  }
+
+  // A car with its average rating and number of reviews
+  async findOneWithRating(id: number) {
+    const car = await this.findOne(id);
+
+    const ratings = await this.reviewsService.getRatings([id]);
+
+    return { ...car, ...ratings.get(id) };
+  }
+
+  // IDs of cars with an active reservation overlapping the requested
+  // period, or undefined when no period was requested
+  private async findReservedCarIds(
+    startDate: string | undefined,
+    endDate: string | undefined,
+    status: CarStatus | undefined,
+  ): Promise<number[] | undefined> {
+    if (!startDate && !endDate) {
+      return undefined;
+    }
+
+    if (!startDate || !endDate) {
+      throw new BadRequestException(
+        'startDate and endDate must be sent together',
+      );
+    }
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    if (start >= end) {
+      throw new BadRequestException('endDate must be after startDate');
+    }
+
+    if (status && status !== CarStatus.AVAILABLE) {
+      throw new BadRequestException(
+        'Only AVAILABLE cars can be searched by dates',
+      );
+    }
+
+    // Same overlap rule as creating a reservation
+    const reservations = await this.reservationsRepository.find({
+      select: { carId: true },
+      where: {
+        status: In([
+          ReservationStatus.PENDING,
+          ReservationStatus.CONFIRMED,
+        ]),
+        startDate: LessThan(end),
+        endDate: MoreThan(start),
+      },
+    });
+
+    return [...new Set(reservations.map((r) => r.carId))];
   }
 
   async findOne(id: number): Promise<Car> {

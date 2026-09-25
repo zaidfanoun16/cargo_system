@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  IsDateString,
   IsEnum,
   IsInt,
   IsOptional,
@@ -38,4 +39,14 @@ export class CarsQueryDto {
   @IsInt()
   @Min(1)
   categoryId?: number;
+
+  // Availability search: only return cars that are free for the whole
+  // period. startDate and endDate must be sent together.
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
 }

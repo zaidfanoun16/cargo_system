@@ -24,9 +24,13 @@ export class User {
   @Column({ default: false })
   isEmailVerified: boolean;
 
-  // Token used to verify the user's email.
+  // SHA-256 hash of the 6-digit code sent to verify the user's email.
   @Column({ type: 'text', nullable: true })
   emailVerificationToken: string | null;
+
+  // Wrong verification code attempts since the last code was sent.
+  @Column({ default: 0 })
+  emailVerificationAttempts: number;
 
   // Expiration time for the email verification token.
   @Column({ type: 'timestamp', nullable: true })

@@ -79,6 +79,7 @@ export class CarsService {
       limit = 10,
       brand,
       model,
+      search,
       status,
       categoryId,
       startDate,
@@ -99,6 +100,15 @@ export class CarsService {
     const modelOptions: FindOptionsWhere<Car>[] = model
       ? [{ model: ILike(`%${model}%`) }, { modelAr: ILike(`%${model}%`) }]
       : [{}];
+    const searchText = search?.trim();
+    const searchOptions: FindOptionsWhere<Car>[] = searchText
+      ? [
+          { brand: ILike(`%${searchText}%`) },
+          { brandAr: ILike(`%${searchText}%`) },
+          { model: ILike(`%${searchText}%`) },
+          { modelAr: ILike(`%${searchText}%`) },
+        ]
+      : [{}];
 
     const baseWhere: FindOptionsWhere<Car> = {
       ...(status && { status }),
@@ -116,11 +126,14 @@ export class CarsService {
 
     const [cars, total] = await this.carsRepository.findAndCount({
       where: brandOptions.flatMap((brandWhere) =>
-        modelOptions.map((modelWhere) => ({
-          ...baseWhere,
-          ...brandWhere,
-          ...modelWhere,
-        })),
+        modelOptions.flatMap((modelWhere) =>
+          searchOptions.map((searchWhere) => ({
+            ...baseWhere,
+            ...brandWhere,
+            ...modelWhere,
+            ...searchWhere,
+          })),
+        ),
       ),
       relations: {
         category: true,

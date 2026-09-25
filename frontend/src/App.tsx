@@ -15,6 +15,8 @@ const VerifyEmailPage = lazy(() => import('./pages/auth/VerifyEmailPage').then((
 const ForgotPasswordPage = lazy(() =>
   import('./pages/auth/ForgotPasswordPage').then((m) => ({ default: m.ForgotPasswordPage })),
 )
+const CarsPage = lazy(() => import('./pages/cars/CarsPage').then((m) => ({ default: m.CarsPage })))
+const CarDetailsPage = lazy(() => import('./pages/car/CarDetailsPage').then((m) => ({ default: m.CarDetailsPage })))
 const ResetPasswordPage = lazy(() =>
   import('./pages/auth/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage })),
 )
@@ -27,9 +29,11 @@ export default function App() {
         <Routes>
           <Route element={<Layout />}>
             <Route index element={<HomePage />} />
+            <Route path="cars" element={<CarsPage />} />
+            <Route path="cars/:id" element={<CarDetailsPage />} />
             <Route
-              path="cars"
-              element={<ComingSoonPage titleKey="nav.cars" />}
+              path="my-bookings"
+              element={<ComingSoonPage titleKey="nav.myBookings" />}
             />
             <Route path="login" element={<LoginPage />} />
             <Route path="register" element={<RegisterPage />} />

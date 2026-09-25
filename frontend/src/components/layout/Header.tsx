@@ -48,6 +48,7 @@ export function Header() {
   const { pathname } = useLocation()
   const scrolled = useScrolled()
   const { user, logout } = useAuth()
+  const navLinks = user ? [...links, { to: '/my-bookings', key: 'nav.myBookings' } as const] : links
 
   // See-through over the home page photo until the page scrolls
   const overHero = pathname === '/' && !scrolled && !menuOpen
@@ -65,7 +66,7 @@ export function Header() {
 
         {/* Desktop navigation */}
         <nav className="hidden items-center gap-1 md:flex">
-          {links.map((link) => (
+          {navLinks.map((link) => (
             <NavLink key={link.to} to={link.to} end className={navLinkClass}>
               {t(link.key)}
             </NavLink>
@@ -125,7 +126,7 @@ export function Header() {
       {menuOpen && (
         <div id="mobile-menu" className="border-t border-border bg-surface md:hidden">
           <Container className="flex flex-col gap-1 py-3">
-            {links.map((link) => (
+            {navLinks.map((link) => (
               <NavLink key={link.to} to={link.to} end className={navLinkClass} onClick={closeMenu}>
                 {t(link.key)}
               </NavLink>

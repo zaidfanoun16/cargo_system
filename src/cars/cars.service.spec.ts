@@ -194,6 +194,17 @@ describe('CarsService', () => {
       ]);
     });
 
+    it('searches the brand and model in both languages', async () => {
+      await service.findAll({ search: ' كامري ' });
+
+      expect(whereOfLastSearch()).toEqual([
+        { brand: ILike('%كامري%') },
+        { brandAr: ILike('%كامري%') },
+        { model: ILike('%كامري%') },
+        { modelAr: ILike('%كامري%') },
+      ]);
+    });
+
     it('requires both brand and model to match', async () => {
       await service.findAll({ brand: 'Toyota', model: 'كامري' });
 

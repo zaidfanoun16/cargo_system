@@ -129,6 +129,74 @@ describe('ReservationsService', () => {
     });
   });
 
+  describe('hourly pricing', () => {
+    beforeEach(() => {
+      reservationsRepository.findOne.mockResolvedValue(null);
+      reservationsRepository.create.mockImplementation((data) => data);
+      reservationsRepository.save.mockImplementation(async (data) => data);
+    });
+
+    // 50/day and 8/hour: hours are cheaper up to 6 hours (48 < 50)
+    const priceOf = async (
+      startDate: string,
+      endDate: string,
+      pricePerHour: string | null = '8.00',
+    ) => {
+      carsRepository.findOne.mockResolvedValue({
+        id: 5,
+        pricePerDay: '50.00',
+        pricePerHour,
+      });
+
+      const reservation = await service.create(
+        { carId: 5, startDate, endDate },
+        currentUser,
+      );
+
+      return reservation.totalPrice;
+    };
+
+    it('charges by the hour for a short rental', async () => {
+      // 5 hours x 8 = 40
+      await expect(
+        priceOf('2030-10-12T09:00:00Z', '2030-10-12T14:00:00Z'),
+      ).resolves.toBe(40);
+    });
+
+    it('charges one day when the hours would cost more', async () => {
+      // 10 hours x 8 = 80 > 50
+      await expect(
+        priceOf('2030-10-12T09:00:00Z', '2030-10-12T19:00:00Z'),
+      ).resolves.toBe(50);
+    });
+
+    it('adds leftover hours to full days', async () => {
+      // 2 days + 3 hours = 100 + 24
+      await expect(
+        priceOf('2030-10-12T09:00:00Z', '2030-10-14T12:00:00Z'),
+      ).resolves.toBe(124);
+    });
+
+    it('rents by the day when the car has no hourly price', async () => {
+      // 5 hours of a day-only car = 1 day
+      await expect(
+        priceOf('2030-10-12T09:00:00Z', '2030-10-12T14:00:00Z', null),
+      ).resolves.toBe(50);
+    });
+
+    it('rejects times that are not on the hour', async () => {
+      await expect(
+        priceOf('2030-10-12T09:15:00Z', '2030-10-12T14:00:00Z'),
+      ).rejects.toThrow('on the hour');
+    });
+
+    it('rejects reservations shorter than 2 hours', async () => {
+      await expect(
+        priceOf('2030-10-12T09:00:00Z', '2030-10-12T10:00:00Z'),
+      ).rejects.toThrow('at least 2 hours');
+    });
+  });
+
   describe('status emails', () => {
     const reservation = {
       id: 7,

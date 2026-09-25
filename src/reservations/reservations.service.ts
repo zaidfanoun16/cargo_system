@@ -27,6 +27,10 @@ import { Car } from '../cars/entities/car.entity';
 import { EmailService } from '../email/email.service';
 
 
+// Shortest reservation allowed
+const MIN_RESERVATION_HOURS = 2;
+
+
 @Injectable()
 export class ReservationsService {
 
@@ -113,6 +117,26 @@ export class ReservationsService {
     }
 
 
+    // Reservations start and end on the hour, e.g. 09:00 not 09:17
+    if (!this.isOnTheHour(startDate) || !this.isOnTheHour(endDate)) {
+      throw new BadRequestException(
+        'Start and end times must be on the hour (minutes and seconds must be 0)',
+      );
+    }
+
+
+    const hourInMs = 60 * 60 * 1000;
+
+    if (
+      endDate.getTime() - startDate.getTime() <
+      MIN_RESERVATION_HOURS * hourInMs
+    ) {
+      throw new BadRequestException(
+        `A reservation must be at least ${MIN_RESERVATION_HOURS} hours`,
+      );
+    }
+
+
     // Check if reservation dates are in the past
     const now = new Date();
 
@@ -164,6 +188,7 @@ export class ReservationsService {
 
         totalPrice: this.calculateTotalPrice(
           Number(car.pricePerDay),
+          car.pricePerHour == null ? null : Number(car.pricePerHour),
           startDate,
           endDate,
         ),
@@ -682,21 +707,49 @@ export class ReservationsService {
 
 
 
-  // Days are counted in whole 24-hour periods, rounding up a partial day.
+  // Full days are charged at pricePerDay. Hours left over are charged at
+  // pricePerHour, but never more than one more day, so the customer always
+  // pays the cheaper of the two. A car without pricePerHour is rented by
+  // the day: a partial day counts as a full day.
   // Prices are multiplied in cents to avoid floating point errors.
   private calculateTotalPrice(
     pricePerDay: number,
+    pricePerHour: number | null,
     startDate: Date,
     endDate: Date,
   ) {
 
-    const dayInMs = 24 * 60 * 60 * 1000;
-
-    const days = Math.ceil(
-      (endDate.getTime() - startDate.getTime()) / dayInMs,
+    const hours = Math.ceil(
+      (endDate.getTime() - startDate.getTime()) / (60 * 60 * 1000),
     );
 
-    return (Math.round(pricePerDay * 100) * days) / 100;
+    const dayCents = Math.round(pricePerDay * 100);
+
+    const fullDays = Math.floor(hours / 24);
+    const extraHours = hours % 24;
+
+    let extraCents = 0;
+
+    if (extraHours > 0) {
+      extraCents =
+        pricePerHour === null
+          ? dayCents
+          : Math.min(extraHours * Math.round(pricePerHour * 100), dayCents);
+    }
+
+    return (fullDays * dayCents + extraCents) / 100;
+
+  }
+
+
+
+  private isOnTheHour(date: Date) {
+
+    return (
+      date.getUTCMinutes() === 0 &&
+      date.getUTCSeconds() === 0 &&
+      date.getUTCMilliseconds() === 0
+    );
 
   }
 

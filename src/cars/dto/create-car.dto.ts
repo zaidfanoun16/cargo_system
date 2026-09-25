@@ -37,6 +37,12 @@ export class CreateCarDto {
   @IsPositive()
   pricePerDay: number;
 
+  // Optional: without it the car can only be rented by the day
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
+  pricePerHour?: number;
+
   @IsOptional()
   @IsEnum(CarStatus)
   status?: CarStatus;

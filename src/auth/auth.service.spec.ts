@@ -4,6 +4,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { User } from '../users/entities/user.entity';
 import { AuthService } from './auth.service';
+import { EmailService } from '../email/email.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -18,6 +19,7 @@ describe('AuthService', () => {
         AuthService,
         { provide: getRepositoryToken(User), useValue: usersRepository },
         { provide: JwtService, useValue: jwtService },
+        { provide: EmailService, useValue: {} },
       ],
     }).compile();
 

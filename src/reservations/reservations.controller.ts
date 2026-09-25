@@ -49,6 +49,7 @@ export class ReservationsController {
       createReservationDto,
       currentUser,
     );
+
   }
 
 
@@ -70,6 +71,48 @@ export class ReservationsController {
     return this.reservationsService.getMyReservations(
       currentUser.userId,
     );
+
+  }
+
+
+
+  // ADMIN views reservations of a specific user
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @Get('user/:userId')
+  getUserReservations(
+    @Param('userId', ParseIntPipe) userId: number,
+  ) {
+
+    return this.reservationsService.getUserReservations(
+      userId,
+    );
+
+  }
+
+
+
+  // USER / ADMIN views one reservation
+  @UseGuards(JwtAuthGuard)
+  @Get(':id')
+  getOne(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() request: Request,
+  ) {
+
+    const currentUser = request.user as {
+      userId: number;
+      email: string;
+      role: string;
+    };
+
+
+    return this.reservationsService.getOne(
+      id,
+      currentUser.userId,
+      currentUser.role,
+    );
+
   }
 
 
@@ -86,7 +129,35 @@ export class ReservationsController {
 
 
 
-  // USER cancels his reservation
+  // ADMIN confirms a pending reservation
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @Patch(':id/confirm')
+  confirm(
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+
+    return this.reservationsService.confirm(id);
+
+  }
+
+
+
+  // ADMIN completes a confirmed reservation
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @Patch(':id/complete')
+  complete(
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+
+    return this.reservationsService.complete(id);
+
+  }
+
+
+
+  // USER / ADMIN cancels a reservation
   @UseGuards(JwtAuthGuard)
   @Patch(':id/cancel')
   cancel(
@@ -104,7 +175,9 @@ export class ReservationsController {
     return this.reservationsService.cancel(
       id,
       currentUser.userId,
+      currentUser.role,
     );
+
   }
 
 

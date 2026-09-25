@@ -10,6 +10,7 @@ import { CarCategoriesModule } from './car-categories/car-categories.module';
 import { CarsModule } from './cars/cars.module';
 import { AuthModule } from './auth/auth.module';
 import { ReservationsModule } from './reservations/reservations.module';
+import { EmailModule } from './email/email.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { ReservationsModule } from './reservations/reservations.module';
     CarsModule,
     AuthModule,
     ReservationsModule,
+    EmailModule,
   ],
 
   controllers: [AppController],

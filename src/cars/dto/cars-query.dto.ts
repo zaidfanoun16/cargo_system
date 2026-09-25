@@ -1,6 +1,6 @@
 import { Type } from 'class-transformer';
 import {
-  IsIn,
+  IsEnum,
   IsInt,
   IsOptional,
   IsString,
@@ -30,7 +30,7 @@ export class CarsQueryDto {
   model?: string;
 
   @IsOptional()
-  @IsIn(['AVAILABLE', 'RESERVED', 'MAINTENANCE'])
+  @IsEnum(CarStatus)
   status?: CarStatus;
 
   @IsOptional()

@@ -26,8 +26,11 @@ export class UsersService {
   // Remove sensitive data before returning the user to the client
   private sanitizeUser(user: User) {
     const {
-      passwordHash,
-      refreshToken,
+      passwordHash: _passwordHash,
+      refreshToken: _refreshToken,
+      emailVerificationToken: _emailVerificationToken,
+      emailVerificationExpiresAt: _emailVerificationExpiresAt,
+      emailVerificationAttempts: _emailVerificationAttempts,
       ...safeUser
     } = user;
 

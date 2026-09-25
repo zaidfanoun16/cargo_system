@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -130,7 +131,7 @@ export class ReservationsService {
 
 
     if (existingReservation) {
-      throw new BadRequestException(
+      throw new ConflictException(
         'Car is already reserved for the selected dates',
       );
     }

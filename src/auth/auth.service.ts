@@ -166,6 +166,7 @@ export class AuthService {
     const refreshToken = await this.jwtService.signAsync(
       {
         sub: user.id,
+        type: 'refresh',
       },
       {
         expiresIn: '7d',
@@ -323,8 +324,19 @@ export class AuthService {
   }
 
   async refreshAccessToken(refreshToken: string) {
-    // Verify the refresh token
-    const payload = await this.jwtService.verifyAsync(refreshToken);
+    // Verify the refresh token (expired or tampered tokens throw)
+    let payload: { sub: number; type?: string };
+
+    try {
+      payload = await this.jwtService.verifyAsync(refreshToken);
+    } catch {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    // Reject access tokens sent to the refresh endpoint
+    if (payload.type !== 'refresh') {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
 
     // Find the user
     const user = await this.usersRepository.findOne({

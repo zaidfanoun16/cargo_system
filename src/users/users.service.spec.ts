@@ -195,6 +195,7 @@ describe('UsersService', () => {
     it('changes the email once the code is confirmed', async () => {
       Object.assign(user, {
         pendingEmail: 'new@b.com',
+        verificationPurpose: 'email-change',
         emailVerificationToken: hashVerificationCode('123456'),
         emailVerificationExpiresAt: new Date(Date.now() + 60_000),
       });
@@ -212,6 +213,7 @@ describe('UsersService', () => {
     it('keeps the old email when the code is wrong', async () => {
       Object.assign(user, {
         pendingEmail: 'new@b.com',
+        verificationPurpose: 'email-change',
         emailVerificationToken: hashVerificationCode('123456'),
         emailVerificationExpiresAt: new Date(Date.now() + 60_000),
       });

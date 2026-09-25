@@ -32,6 +32,11 @@ export class User {
   @Column({ type: 'text', nullable: true })
   emailVerificationToken: string | null;
 
+  // What the current code was sent for: register, email-change or
+  // password-reset.
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  verificationPurpose: string | null;
+
   // Wrong verification code attempts since the last code was sent.
   @Column({ default: 0 })
   emailVerificationAttempts: number;

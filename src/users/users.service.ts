@@ -48,6 +48,7 @@ export class UsersService {
       emailVerificationExpiresAt: _emailVerificationExpiresAt,
       emailVerificationAttempts: _emailVerificationAttempts,
       pendingEmail: _pendingEmail,
+      verificationPurpose: _verificationPurpose,
       ...safeUser
     } = user;
 
@@ -182,7 +183,7 @@ export class UsersService {
     await this.ensureEmailIsFree(changeEmailDto.newEmail);
 
     user.pendingEmail = changeEmailDto.newEmail;
-    const code = setVerificationCode(user);
+    const code = setVerificationCode(user, 'email-change');
 
     await this.usersRepository.save(user);
 
@@ -208,7 +209,7 @@ export class UsersService {
       throw new BadRequestException('No email change was requested');
     }
 
-    const result = checkVerificationCode(user, code);
+    const result = checkVerificationCode(user, code, 'email-change');
 
     if (result === 'too-many-attempts') {
       throw new BadRequestException(

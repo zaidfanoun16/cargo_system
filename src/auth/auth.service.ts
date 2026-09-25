@@ -51,7 +51,7 @@ export class AuthService {
     user.email = createUserDto.email;
     user.passwordHash = passwordHash;
 
-    const code = setVerificationCode(user);
+    const code = setVerificationCode(user, 'register');
 
     // Save the user
     const savedUser = await this.usersRepository.save(user);
@@ -70,6 +70,7 @@ export class AuthService {
       emailVerificationExpiresAt: _emailVerificationExpiresAt,
       emailVerificationAttempts: _emailVerificationAttempts,
       pendingEmail: _pendingEmail,
+      verificationPurpose: _verificationPurpose,
       refreshToken: _refreshToken,
       ...safeUser
     } = savedUser;
@@ -141,6 +142,7 @@ export class AuthService {
       emailVerificationExpiresAt: _emailVerificationExpiresAt,
       emailVerificationAttempts: _emailVerificationAttempts,
       pendingEmail: _pendingEmail,
+      verificationPurpose: _verificationPurpose,
       ...safeUser
     } = user;
 
@@ -167,7 +169,7 @@ export class AuthService {
       throw invalidCode;
     }
 
-    const result = checkVerificationCode(user, code);
+    const result = checkVerificationCode(user, code, 'register');
 
     // Stop guessing: after too many wrong attempts a new code is required
     if (result === 'too-many-attempts') {
@@ -216,7 +218,7 @@ export class AuthService {
     }
 
     // Generate a new code and reset the attempts counter
-    const code = setVerificationCode(user);
+    const code = setVerificationCode(user, 'register');
 
     // Save the new code
     await this.usersRepository.save(user);
@@ -230,6 +232,90 @@ export class AuthService {
 
     return {
       message: 'Verification code sent successfully',
+    };
+  }
+
+  // Step 1 of resetting a forgotten password: email a code
+  async forgotPassword(email: string) {
+    // Same response whether or not the email exists, so this endpoint
+    // cannot be used to find out who has an account
+    const response = {
+      message: 'If this email is registered, a reset code has been sent',
+    };
+
+    const user = await this.usersRepository.findOne({
+      where: { email },
+    });
+
+    if (!user) {
+      return response;
+    }
+
+    // Replaces any other pending code, including an email change
+    user.pendingEmail = null;
+    const code = setVerificationCode(user, 'password-reset');
+
+    await this.usersRepository.save(user);
+
+    await this.emailService.sendVerificationCode(
+      user.email,
+      user.fullName,
+      code,
+      'Enter this code to reset your password:',
+    );
+
+    return response;
+  }
+
+  // Step 2 of resetting a forgotten password: set a new one with the code
+  async resetPassword(
+    email: string,
+    code: string,
+    newPassword: string,
+  ) {
+    const invalidCode = new BadRequestException(
+      'Invalid or expired reset code',
+    );
+
+    const user = await this.usersRepository.findOne({
+      where: { email },
+    });
+
+    if (!user) {
+      throw invalidCode;
+    }
+
+    const result = checkVerificationCode(user, code, 'password-reset');
+
+    if (result === 'too-many-attempts') {
+      throw new BadRequestException(
+        'Too many wrong attempts, please request a new code',
+      );
+    }
+
+    if (result !== 'valid') {
+      // Save the incremented attempts counter
+      if (result === 'wrong') {
+        await this.usersRepository.save(user);
+      }
+
+      throw invalidCode;
+    }
+
+    user.passwordHash = await bcrypt.hash(newPassword, 10);
+
+    // The code reached this inbox, which proves the user owns the email
+    user.isEmailVerified = true;
+
+    // Sign out every session: their refresh token stops working
+    user.refreshToken = null;
+
+    clearVerificationCode(user);
+
+    await this.usersRepository.save(user);
+
+    return {
+      message: 'Password reset successfully',
     };
   }
 

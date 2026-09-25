@@ -4,6 +4,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { createHash } from 'crypto';
+import * as bcrypt from 'bcrypt';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { JwtService } from '@nestjs/jwt';
@@ -90,6 +91,7 @@ describe('AuthService', () => {
       emailVerificationToken: hash('123456'),
       emailVerificationExpiresAt: new Date(Date.now() + 60_000),
       emailVerificationAttempts: 0,
+      verificationPurpose: 'register',
     });
 
     beforeEach(() => {
@@ -188,6 +190,69 @@ describe('AuthService', () => {
           password: 'password123',
         }),
       ).rejects.toBeInstanceOf(ConflictException);
+    });
+  });
+
+  describe('password reset', () => {
+    const hash = (code: string) =>
+      createHash('sha256').update(code).digest('hex');
+
+    const userWithCode = (purpose: string) => ({
+      id: 1,
+      email: 'a@b.com',
+      fullName: 'A',
+      isEmailVerified: true,
+      passwordHash: 'old-hash',
+      refreshToken: 'refresh-token',
+      pendingEmail: null,
+      emailVerificationToken: hash('123456'),
+      emailVerificationExpiresAt: new Date(Date.now() + 60_000),
+      emailVerificationAttempts: 0,
+      verificationPurpose: purpose,
+    });
+
+    beforeEach(() => {
+      usersRepository.save.mockImplementation(async (user) => user);
+    });
+
+    it('emails a reset code to a registered user', async () => {
+      const user = { ...userWithCode('register'), emailVerificationToken: null };
+      usersRepository.findOne.mockResolvedValue(user);
+
+      await service.forgotPassword('a@b.com');
+
+      expect(user.verificationPurpose).toBe('password-reset');
+      expect(emailService.sendVerificationCode).toHaveBeenCalled();
+    });
+
+    it('gives the same answer for an unknown email and sends nothing', async () => {
+      usersRepository.findOne.mockResolvedValue(null);
+
+      await expect(service.forgotPassword('nobody@b.com')).resolves.toEqual({
+        message: 'If this email is registered, a reset code has been sent',
+      });
+      expect(emailService.sendVerificationCode).not.toHaveBeenCalled();
+    });
+
+    it('sets the new password and signs out sessions', async () => {
+      const user = userWithCode('password-reset');
+      usersRepository.findOne.mockResolvedValue(user);
+
+      await service.resetPassword('a@b.com', '123456', 'newPassword1');
+
+      expect(await bcrypt.compare('newPassword1', user.passwordHash)).toBe(true);
+      expect(user.refreshToken).toBeNull();
+      expect(user.emailVerificationToken).toBeNull();
+    });
+
+    it('rejects a code that was sent for an email change', async () => {
+      const user = userWithCode('email-change');
+      usersRepository.findOne.mockResolvedValue(user);
+
+      await expect(
+        service.resetPassword('a@b.com', '123456', 'newPassword1'),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(user.passwordHash).toBe('old-hash');
     });
   });
 });

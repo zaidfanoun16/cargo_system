@@ -29,7 +29,7 @@ const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 @Controller('cars')
 export class CarsController {
-  constructor(private readonly carsService: CarsService) {}
+  constructor(private readonly carsService: CarsService) { }
 
   // POST /cars - Admin only
   @Post()
@@ -91,9 +91,7 @@ export class CarsController {
       fileFilter: (_request, file, callback) => {
         if (!ALLOWED_IMAGE_TYPES.includes(file.mimetype)) {
           return callback(
-            new BadRequestException(
-              'Only JPEG, PNG and WebP images are allowed',
-            ),
+            new BadRequestException('Only JPEG, PNG and WebP images are allowed'),
             false,
           );
         }

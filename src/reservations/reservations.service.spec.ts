@@ -33,10 +33,7 @@ describe('ReservationsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ReservationsService,
-        {
-          provide: getRepositoryToken(Reservation),
-          useValue: reservationsRepository,
-        },
+        { provide: getRepositoryToken(Reservation), useValue: reservationsRepository },
         { provide: getRepositoryToken(User), useValue: {} },
         { provide: getRepositoryToken(Car), useValue: carsRepository },
         { provide: EmailService, useValue: emailService },

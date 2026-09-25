@@ -79,7 +79,9 @@ describe('CarsService', () => {
     it('refuses to delete a car with reservations', async () => {
       reservationsRepository.count.mockResolvedValue(1);
 
-      await expect(service.remove(5)).rejects.toBeInstanceOf(ConflictException);
+      await expect(service.remove(5)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
       expect(carsRepository.remove).not.toHaveBeenCalled();
     });
   });

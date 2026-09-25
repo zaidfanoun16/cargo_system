@@ -21,7 +21,9 @@ import { Roles } from '../common/decorators/roles.decorator';
 
 @Controller('car-categories')
 export class CarCategoriesController {
-  constructor(private readonly carCategoriesService: CarCategoriesService) {}
+  constructor(
+    private readonly carCategoriesService: CarCategoriesService,
+  ) {}
 
   // POST /car-categories - Admin only
   @Post()

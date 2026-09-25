@@ -190,7 +190,10 @@ export class CarsService {
     const reservations = await this.reservationsRepository.find({
       select: { carId: true },
       where: {
-        status: In([ReservationStatus.PENDING, ReservationStatus.CONFIRMED]),
+        status: In([
+          ReservationStatus.PENDING,
+          ReservationStatus.CONFIRMED,
+        ]),
         startDate: LessThan(end),
         endDate: MoreThan(start),
       },
@@ -237,7 +240,10 @@ export class CarsService {
       select: { startDate: true, endDate: true, status: true },
       where: {
         carId: id,
-        status: In([ReservationStatus.PENDING, ReservationStatus.CONFIRMED]),
+        status: In([
+          ReservationStatus.PENDING,
+          ReservationStatus.CONFIRMED,
+        ]),
         startDate: LessThan(monthEnd),
         endDate: MoreThan(monthStart),
       },
@@ -276,7 +282,10 @@ export class CarsService {
     };
   }
 
-  async update(id: number, updateCarDto: UpdateCarDto): Promise<Car> {
+  async update(
+    id: number,
+    updateCarDto: UpdateCarDto,
+  ): Promise<Car> {
     const car = await this.findOne(id);
 
     const { categoryId, ...carData } = updateCarDto;

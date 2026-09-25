@@ -20,12 +20,14 @@ export class CarCategoriesService {
 
     @InjectRepository(Car)
     private readonly carsRepository: Repository<Car>,
-  ) {}
+  ) { }
 
   async create(
     createCarCategoryDto: CreateCarCategoryDto,
   ): Promise<CarCategory> {
-    const category = this.carCategoriesRepository.create(createCarCategoryDto);
+    const category = this.carCategoriesRepository.create(
+      createCarCategoryDto,
+    );
 
     return this.carCategoriesRepository.save(category);
   }
@@ -40,7 +42,9 @@ export class CarCategoriesService {
     });
 
     if (!category) {
-      throw new NotFoundException(`Car category with ID ${id} not found`);
+      throw new NotFoundException(
+        `Car category with ID ${id} not found`,
+      );
     }
 
     return category;

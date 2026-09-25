@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   UnauthorizedException,
@@ -8,11 +9,17 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { Repository } from 'typeorm';
-import { randomBytes } from 'crypto';
+import { createHash, randomInt, timingSafeEqual } from 'crypto';
 
 import { User } from '../users/entities/user.entity';
 import { CreateUserDto } from '../users/dto/create-user.dto';
 import { EmailService } from '../email/email.service';
+
+// How long a verification code stays valid
+const VERIFICATION_CODE_TTL_MS = 10 * 60 * 1000;
+
+// Wrong attempts allowed before the user must request a new code
+const MAX_VERIFICATION_ATTEMPTS = 5;
 
 @Injectable()
 export class AuthService {
@@ -31,89 +38,35 @@ export class AuthService {
       where: { email: createUserDto.email },
     });
 
-    if (existingUser) {
+    if (existingUser?.isEmailVerified) {
       throw new ConflictException('Email is already registered');
     }
 
     // Hash the user's password before storing it
     const passwordHash = await bcrypt.hash(createUserDto.password, 10);
 
-    // Generate a secure random token for email verification
-    const emailVerificationToken = randomBytes(32).toString('hex');
-
-    // Set the verification token expiration time to 15 minutes
-    const emailVerificationExpiresAt = new Date(
-      Date.now() + 15 * 60 * 1000,
-    );
-
-    // Create the user
+    // An unverified account with this email is replaced, so an abandoned
+    // registration does not block the email forever.
     // isEmailVerified remains false by default.
-    const user = this.usersRepository.create({
-      fullName: createUserDto.fullName,
-      email: createUserDto.email,
-      passwordHash,
-      emailVerificationToken,
-      emailVerificationExpiresAt,
-    });
+    const user = existingUser ?? this.usersRepository.create();
+    user.fullName = createUserDto.fullName;
+    user.email = createUserDto.email;
+    user.passwordHash = passwordHash;
+
+    const code = this.setVerificationCode(user);
 
     // Save the user
     const savedUser = await this.usersRepository.save(user);
 
-    // Send verification email
-    await this.emailService.sendEmail(
-      savedUser.email,
-      'Verify your Cargo System account',
-      `
-        <div style="
-          font-family: Arial, sans-serif;
-          max-width: 500px;
-          margin: 0 auto;
-          padding: 30px;
-          text-align: center;
-          color: #333;
-        ">
-
-          <h2 style="margin-bottom: 10px;">
-            Welcome to Cargo System 🚗
-          </h2>
-
-          <p style="font-size: 16px;">
-            Hi ${savedUser.fullName},
-          </p>
-
-          <p style="font-size: 15px; line-height: 1.6;">
-            Please verify your email to activate your account.
-          </p>
-
-          <a
-            href="http://localhost:3000/auth/verify-email?token=${savedUser.emailVerificationToken}"
-            style="
-              display: inline-block;
-              margin: 20px 0;
-              padding: 12px 24px;
-              background-color: #2563eb;
-              color: white;
-              text-decoration: none;
-              border-radius: 6px;
-              font-weight: bold;
-            "
-          >
-            Verify Email
-          </a>
-
-          <p style="font-size: 13px; color: #777;">
-            This link expires in 15 minutes.
-          </p>
-
-        </div>
-      `,
-    );
+    // Send the verification code
+    await this.sendVerificationCode(savedUser, code);
 
     // Remove sensitive fields from the response
     const {
       passwordHash: _passwordHash,
       emailVerificationToken: _emailVerificationToken,
       emailVerificationExpiresAt: _emailVerificationExpiresAt,
+      emailVerificationAttempts: _emailVerificationAttempts,
       refreshToken: _refreshToken,
       ...safeUser
     } = savedUser;
@@ -183,6 +136,7 @@ export class AuthService {
       refreshToken: _refreshToken,
       emailVerificationToken: _emailVerificationToken,
       emailVerificationExpiresAt: _emailVerificationExpiresAt,
+      emailVerificationAttempts: _emailVerificationAttempts,
       ...safeUser
     } = user;
 
@@ -194,40 +148,56 @@ export class AuthService {
     };
   }
 
-  async verifyEmail(token: string) {
-    // Reject if no token was provided
-    if (!token) {
-      throw new UnauthorizedException('Verification token is required');
-    }
+  async verifyEmail(email: string, code: string) {
+    const invalidCode = new BadRequestException(
+      'Invalid or expired verification code',
+    );
 
-    // Find the user using the verification token
+    // Find the user by email
     const user = await this.usersRepository.findOne({
-      where: {
-        emailVerificationToken: token,
-      },
+      where: { email },
     });
 
-    // Reject if the token does not exist
-    if (!user) {
-      throw new UnauthorizedException('Invalid verification token');
+    // Reject if the user does not exist or has no pending code
+    if (!user || user.isEmailVerified || !user.emailVerificationToken) {
+      throw invalidCode;
     }
 
-    // Reject if the token has expired
+    // Reject if the code has expired
     if (
       !user.emailVerificationExpiresAt ||
       user.emailVerificationExpiresAt < new Date()
     ) {
-      throw new UnauthorizedException(
-        'Verification token has expired',
+      throw invalidCode;
+    }
+
+    // Stop guessing: after too many wrong attempts a new code is required
+    if (user.emailVerificationAttempts >= MAX_VERIFICATION_ATTEMPTS) {
+      throw new BadRequestException(
+        'Too many wrong attempts, please request a new code',
       );
+    }
+
+    // Compare hashes in constant time
+    const isCodeValid = timingSafeEqual(
+      Buffer.from(this.hashVerificationCode(code)),
+      Buffer.from(user.emailVerificationToken),
+    );
+
+    if (!isCodeValid) {
+      user.emailVerificationAttempts += 1;
+      await this.usersRepository.save(user);
+
+      throw invalidCode;
     }
 
     // Mark the user's email as verified
     user.isEmailVerified = true;
 
-    // Remove the token so it cannot be reused
+    // Remove the code so it cannot be reused
     user.emailVerificationToken = null;
     user.emailVerificationExpiresAt = null;
+    user.emailVerificationAttempts = 0;
 
     // Save the verified user
     await this.usersRepository.save(user);
@@ -253,25 +223,42 @@ export class AuthService {
       throw new ConflictException('Email is already verified');
     }
 
-    // Generate a new verification token
-    const emailVerificationToken = randomBytes(32).toString('hex');
+    // Generate a new code and reset the attempts counter
+    const code = this.setVerificationCode(user);
 
-    // Set the new token expiration time to 15 minutes
-    const emailVerificationExpiresAt = new Date(
-      Date.now() + 15 * 60 * 1000,
-    );
-
-    // Update the user's verification information
-    user.emailVerificationToken = emailVerificationToken;
-    user.emailVerificationExpiresAt = emailVerificationExpiresAt;
-
-    // Save the new token
+    // Save the new code
     await this.usersRepository.save(user);
 
-    // Send the new verification email
+    // Send the new code
+    await this.sendVerificationCode(user, code);
+
+    return {
+      message: 'Verification code sent successfully',
+    };
+  }
+
+  // Generate a new 6-digit code and store only its hash on the user.
+  // Returns the plain code so it can be emailed.
+  private setVerificationCode(user: User) {
+    const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
+
+    user.emailVerificationToken = this.hashVerificationCode(code);
+    user.emailVerificationExpiresAt = new Date(
+      Date.now() + VERIFICATION_CODE_TTL_MS,
+    );
+    user.emailVerificationAttempts = 0;
+
+    return code;
+  }
+
+  private hashVerificationCode(code: string) {
+    return createHash('sha256').update(code).digest('hex');
+  }
+
+  private async sendVerificationCode(user: User, code: string) {
     await this.emailService.sendEmail(
       user.email,
-      'Verify your Cargo System account',
+      'Your Cargo System verification code',
       `
         <div style="
           font-family: Arial, sans-serif;
@@ -283,7 +270,7 @@ export class AuthService {
         ">
 
           <h2 style="margin-bottom: 10px;">
-            Verify Your Email 🚗
+            Welcome to Cargo System 🚗
           </h2>
 
           <p style="font-size: 16px;">
@@ -291,36 +278,26 @@ export class AuthService {
           </p>
 
           <p style="font-size: 15px; line-height: 1.6;">
-            Here is your new verification link.
+            Enter this code to verify your email:
           </p>
 
-          <a
-            href="http://localhost:3000/auth/verify-email?token=${user.emailVerificationToken}"
-            style="
-              display: inline-block;
-              margin: 20px 0;
-              padding: 12px 24px;
-              background-color: #2563eb;
-              color: white;
-              text-decoration: none;
-              border-radius: 6px;
-              font-weight: bold;
-            "
-          >
-            Verify Email
-          </a>
+          <p style="
+            margin: 20px 0;
+            font-size: 32px;
+            font-weight: bold;
+            letter-spacing: 8px;
+            color: #2563eb;
+          ">
+            ${code}
+          </p>
 
           <p style="font-size: 13px; color: #777;">
-            This link expires in 15 minutes.
+            This code expires in 10 minutes.
           </p>
 
         </div>
       `,
     );
-
-    return {
-      message: 'Verification email sent successfully',
-    };
   }
 
   async refreshAccessToken(refreshToken: string) {

@@ -7,7 +7,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 import { Repository } from 'typeorm';
 
-import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { User } from './entities/user.entity';
 
@@ -27,29 +26,15 @@ export class UsersService {
   // Remove sensitive data before returning the user to the client
   private sanitizeUser(user: User) {
     const {
-      passwordHash,
-      refreshToken,
+      passwordHash: _passwordHash,
+      refreshToken: _refreshToken,
+      emailVerificationToken: _emailVerificationToken,
+      emailVerificationExpiresAt: _emailVerificationExpiresAt,
+      emailVerificationAttempts: _emailVerificationAttempts,
       ...safeUser
     } = user;
 
     return safeUser;
-  }
-
-  // Create a new user
-  async create(createUserDto: CreateUserDto) {
-    // Hash the plain password before saving it
-    const passwordHash = await bcrypt.hash(createUserDto.password, 10);
-
-    const user = this.usersRepository.create({
-      fullName: createUserDto.fullName,
-      email: createUserDto.email,
-      passwordHash,
-    });
-
-    const savedUser = await this.usersRepository.save(user);
-
-    // Return user data without passwordHash
-    return this.sanitizeUser(savedUser);
   }
 
   // Get all users

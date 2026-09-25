@@ -1,4 +1,5 @@
-import { ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
+import { In, Not } from 'typeorm';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Car } from './entities/car.entity';
@@ -9,8 +10,12 @@ import { CarsService } from './cars.service';
 describe('CarsService', () => {
   let service: CarsService;
 
-  const carsRepository = { findOne: jest.fn(), remove: jest.fn() };
-  const reservationsRepository = { count: jest.fn() };
+  const carsRepository = {
+    findOne: jest.fn(),
+    remove: jest.fn(),
+    findAndCount: jest.fn(),
+  };
+  const reservationsRepository = { count: jest.fn(), find: jest.fn() };
 
   beforeEach(async () => {
     jest.resetAllMocks();
@@ -54,6 +59,52 @@ describe('CarsService', () => {
         ConflictException,
       );
       expect(carsRepository.remove).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findAll by dates', () => {
+    beforeEach(() => {
+      carsRepository.findAndCount.mockResolvedValue([[], 0]);
+    });
+
+    const whereOfLastSearch = () =>
+      carsRepository.findAndCount.mock.calls[0][0].where;
+
+    it('excludes cars reserved in the period and unavailable cars', async () => {
+      reservationsRepository.find.mockResolvedValue([
+        { carId: 1 },
+        { carId: 2 },
+        { carId: 1 },
+      ]);
+
+      await service.findAll({
+        startDate: '2030-10-10',
+        endDate: '2030-10-15',
+      });
+
+      expect(whereOfLastSearch()).toMatchObject({
+        status: 'AVAILABLE',
+        id: Not(In([1, 2])),
+      });
+    });
+
+    it('does not filter by reservations without dates', async () => {
+      await service.findAll({});
+
+      expect(reservationsRepository.find).not.toHaveBeenCalled();
+      expect(whereOfLastSearch().id).toBeUndefined();
+    });
+
+    it('requires both dates', async () => {
+      await expect(
+        service.findAll({ startDate: '2030-10-10' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('requires endDate after startDate', async () => {
+      await expect(
+        service.findAll({ startDate: '2030-10-15', endDate: '2030-10-10' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 });

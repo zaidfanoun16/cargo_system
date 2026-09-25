@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
@@ -17,7 +17,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     sub: number;
     email: string;
     role: string;
+    type?: string;
   }) {
+    // Refresh tokens are signed with the same secret, so they must not
+    // be accepted as access tokens
+    if (payload.type === 'refresh') {
+      throw new UnauthorizedException();
+    }
+
     return {
       userId: payload.sub,
       email: payload.email,

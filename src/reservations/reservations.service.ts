@@ -1,15 +1,17 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, LessThan, MoreThan, Repository } from 'typeorm';
 
 import { Reservation } from './entities/reservation.entity';
 import { User } from '../users/entities/user.entity';
 import { Car } from '../cars/entities/car.entity';
+import { ReservationStatus } from './enums/reservation-status.enum';
 
 
 @Injectable()
@@ -72,6 +74,30 @@ export class ReservationsService {
     if (startDate >= endDate) {
       throw new BadRequestException(
         'End date must be after start date',
+      );
+    }
+
+
+    // The car must not have an active reservation that overlaps these dates
+    const overlappingReservation =
+      await this.reservationsRepository.findOne({
+
+        where: {
+          carId: car.id,
+          status: In([
+            ReservationStatus.PENDING,
+            ReservationStatus.CONFIRMED,
+          ]),
+          startDate: LessThan(endDate),
+          endDate: MoreThan(startDate),
+        },
+
+      });
+
+
+    if (overlappingReservation) {
+      throw new ConflictException(
+        'Car is already reserved for these dates',
       );
     }
 

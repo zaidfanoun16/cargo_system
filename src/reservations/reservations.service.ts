@@ -25,6 +25,12 @@ import { Car } from '../cars/entities/car.entity';
 // Shortest reservation allowed
 const MIN_RESERVATION_HOURS = 2;
 
+// Discounts for long rentals, longest first
+const DURATION_DISCOUNTS = [
+  { minDays: 30, percent: 20 },
+  { minDays: 7, percent: 10 },
+];
+
 
 @Injectable()
 export class ReservationsService {
@@ -173,7 +179,7 @@ export class ReservationsService {
 
         endDate,
 
-        totalPrice: this.calculateTotalPrice(
+        ...this.calculatePrice(
           Number(car.pricePerDay),
           car.pricePerHour == null ? null : Number(car.pricePerHour),
           startDate,
@@ -236,7 +242,9 @@ export class ReservationsService {
           startDate: true,
           endDate: true,
           status: true,
-          totalPrice: true,
+          basePrice: true,
+        discountPercent: true,
+        totalPrice: true,
           userId: true,
           carId: true,
           createdAt: true,
@@ -305,6 +313,8 @@ export class ReservationsService {
         startDate: true,
         endDate: true,
         status: true,
+        basePrice: true,
+        discountPercent: true,
         totalPrice: true,
         userId: true,
         carId: true,
@@ -376,6 +386,8 @@ export class ReservationsService {
         startDate: true,
         endDate: true,
         status: true,
+        basePrice: true,
+        discountPercent: true,
         totalPrice: true,
         userId: true,
         carId: true,
@@ -682,12 +694,49 @@ export class ReservationsService {
 
 
 
+  // Base price, then the discount for long rentals: 10% from 7 days and
+  // 20% from 30 days (the longest matching discount applies)
+  private calculatePrice(
+    pricePerDay: number,
+    pricePerHour: number | null,
+    startDate: Date,
+    endDate: Date,
+  ) {
+
+    const baseCents = this.calculateBaseCents(
+      pricePerDay,
+      pricePerHour,
+      startDate,
+      endDate,
+    );
+
+    const days =
+      (endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000);
+
+    const discountPercent =
+      DURATION_DISCOUNTS.find((discount) => days >= discount.minDays)
+        ?.percent ?? 0;
+
+    const totalCents = Math.round(
+      (baseCents * (100 - discountPercent)) / 100,
+    );
+
+    return {
+      basePrice: baseCents / 100,
+      discountPercent,
+      totalPrice: totalCents / 100,
+    };
+
+  }
+
+
+
   // Full days are charged at pricePerDay. Hours left over are charged at
   // pricePerHour, but never more than one more day, so the customer always
   // pays the cheaper of the two. A car without pricePerHour is rented by
   // the day: a partial day counts as a full day.
-  // Prices are multiplied in cents to avoid floating point errors.
-  private calculateTotalPrice(
+  // Works in cents to avoid floating point errors.
+  private calculateBaseCents(
     pricePerDay: number,
     pricePerHour: number | null,
     startDate: Date,
@@ -712,7 +761,7 @@ export class ReservationsService {
           : Math.min(extraHours * Math.round(pricePerHour * 100), dayCents);
     }
 
-    return (fullDays * dayCents + extraCents) / 100;
+    return fullDays * dayCents + extraCents;
 
   }
 

@@ -27,9 +27,27 @@ export class Reservation {
   endDate: Date;
 
 
-  // Price for the whole reservation, fixed when it is created so later
-  // changes to the car's pricePerDay do not affect it.
+  // Price before the duration discount.
   // PostgreSQL returns decimals as strings, so convert them to numbers.
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => Number(value),
+    },
+  })
+  basePrice: number;
+
+
+  // Discount for long rentals, in percent (0, 10 or 20)
+  @Column({ type: 'smallint', default: 0 })
+  discountPercent: number;
+
+
+  // Price the customer pays (basePrice minus the discount), fixed when the
+  // reservation is created so later price changes do not affect it.
   @Column({
     type: 'decimal',
     precision: 10,

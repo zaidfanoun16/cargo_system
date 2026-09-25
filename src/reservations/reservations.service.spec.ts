@@ -190,4 +190,46 @@ describe('ReservationsService', () => {
       ).rejects.toThrow('at least 2 hours');
     });
   });
+
+  describe('duration discounts', () => {
+    beforeEach(() => {
+      reservationsRepository.findOne.mockResolvedValue(null);
+      reservationsRepository.create.mockImplementation((data) => data);
+      reservationsRepository.save.mockImplementation(async (data) => data);
+      carsRepository.findOne.mockResolvedValue({
+        id: 5,
+        pricePerDay: '33.33',
+        pricePerHour: null,
+      });
+    });
+
+    const book = (startDate: string, endDate: string) =>
+      service.create({ carId: 5, startDate, endDate }, currentUser);
+
+    it('gives no discount under 7 days', async () => {
+      await expect(book('2030-10-01', '2030-10-07')).resolves.toMatchObject({
+        basePrice: 199.98,
+        discountPercent: 0,
+        totalPrice: 199.98,
+      });
+    });
+
+    it('gives 10% from 7 days', async () => {
+      // 7 x 33.33 = 233.31, minus 10% = 209.979 → 209.98
+      await expect(book('2030-10-01', '2030-10-08')).resolves.toMatchObject({
+        basePrice: 233.31,
+        discountPercent: 10,
+        totalPrice: 209.98,
+      });
+    });
+
+    it('gives 20% from 30 days', async () => {
+      // 30 x 33.33 = 999.9, minus 20% = 799.92
+      await expect(book('2030-10-01', '2030-10-31')).resolves.toMatchObject({
+        basePrice: 999.9,
+        discountPercent: 20,
+        totalPrice: 799.92,
+      });
+    });
+  });
 });

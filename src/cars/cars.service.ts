@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -8,12 +9,17 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, Repository } from 'typeorm';
 
 import { Car } from './entities/car.entity';
+import { CarImage } from './entities/car-image.entity';
 import { CreateCarDto } from './dto/create-car.dto';
 import { UpdateCarDto } from './dto/update-car.dto';
 import { CarsQueryDto } from './dto/cars-query.dto';
 import { CarCategory } from '../car-categories/entities/car-category.entity';
 import { CarStatus } from './enums/car-status.enum';
 import { Reservation } from '../reservations/entities/reservation.entity';
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
+
+// Most photos one car can have
+const MAX_IMAGES_PER_CAR = 10;
 
 @Injectable()
 export class CarsService {
@@ -26,6 +32,11 @@ export class CarsService {
 
     @InjectRepository(Reservation)
     private readonly reservationsRepository: Repository<Reservation>,
+
+    @InjectRepository(CarImage)
+    private readonly carImagesRepository: Repository<CarImage>,
+
+    private readonly cloudinaryService: CloudinaryService,
   ) {}
 
   async create(createCarDto: CreateCarDto): Promise<Car> {
@@ -73,11 +84,13 @@ export class CarsService {
       },
       relations: {
         category: true,
+        images: true,
       },
       skip: (page - 1) * limit,
       take: limit,
       order: {
         createdAt: 'DESC',
+        images: { createdAt: 'ASC' },
       },
     });
 
@@ -95,6 +108,10 @@ export class CarsService {
       where: { id },
       relations: {
         category: true,
+        images: true,
+      },
+      order: {
+        images: { createdAt: 'ASC' },
       },
     });
 
@@ -147,6 +164,57 @@ export class CarsService {
       );
     }
 
+    // Delete the photos from Cloudinary too; the database rows are
+    // removed with the car
+    for (const image of car.images) {
+      await this.cloudinaryService.deleteImage(image.publicId);
+    }
+
     await this.carsRepository.remove(car);
+  }
+
+  // ADMIN: upload photos of a car to Cloudinary
+  async addImages(id: number, files: Express.Multer.File[]) {
+    const car = await this.findOne(id);
+
+    if (!files || files.length === 0) {
+      throw new BadRequestException('Send at least one image');
+    }
+
+    if (car.images.length + files.length > MAX_IMAGES_PER_CAR) {
+      throw new BadRequestException(
+        `A car can have at most ${MAX_IMAGES_PER_CAR} images (it has ${car.images.length})`,
+      );
+    }
+
+    for (const file of files) {
+      const { url, publicId } = await this.cloudinaryService.uploadImage(
+        file,
+        'cargo-system/cars',
+      );
+
+      await this.carImagesRepository.save(
+        this.carImagesRepository.create({ url, publicId, carId: id }),
+      );
+    }
+
+    return this.findOne(id);
+  }
+
+  // ADMIN: delete one photo of a car
+  async removeImage(carId: number, imageId: number): Promise<void> {
+    const image = await this.carImagesRepository.findOne({
+      where: { id: imageId, carId },
+    });
+
+    if (!image) {
+      throw new NotFoundException(
+        `Image with ID ${imageId} not found for car ${carId}`,
+      );
+    }
+
+    await this.cloudinaryService.deleteImage(image.publicId);
+
+    await this.carImagesRepository.remove(image);
   }
 }

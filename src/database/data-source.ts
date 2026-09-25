@@ -4,6 +4,7 @@ import { DataSource } from 'typeorm';
 
 import { User } from '../users/entities/user.entity';
 import { Car } from '../cars/entities/car.entity';
+import { CarImage } from '../cars/entities/car-image.entity';
 import { CarCategory } from '../car-categories/entities/car-category.entity';
 import { Reservation } from '../reservations/entities/reservation.entity';
 
@@ -25,6 +26,7 @@ export default new DataSource({
   entities: [
     User,
     Car,
+    CarImage,
     CarCategory,
     Reservation,
   ],

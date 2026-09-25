@@ -4,12 +4,14 @@ import {
   Entity,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 
 import { CarCategory } from '../../car-categories/entities/car-category.entity';
 import { CarStatus } from '../enums/car-status.enum';
+import { CarImage } from './car-image.entity';
 
 @Entity('cars')
 export class Car {
@@ -53,6 +55,10 @@ export class Car {
   })
   @JoinColumn({ name: 'categoryId' })
   category: CarCategory;
+
+  // Photos of the car, oldest first
+  @OneToMany(() => CarImage, (image) => image.car)
+  images: CarImage[];
 
   // Record creation date
   @CreateDateColumn()

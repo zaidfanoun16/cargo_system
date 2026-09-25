@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
@@ -16,6 +17,7 @@ describe('UsersService', () => {
     findOne: jest.fn(),
     remove: jest.fn(),
     save: jest.fn(),
+    createQueryBuilder: jest.fn(),
   };
   const reservationsRepository = { count: jest.fn() };
   const emailService = { sendVerificationCode: jest.fn() };
@@ -32,6 +34,7 @@ describe('UsersService', () => {
           useValue: reservationsRepository,
         },
         { provide: EmailService, useValue: emailService },
+        { provide: ConfigService, useValue: { get: () => undefined } },
       ],
     }).compile();
 
@@ -224,6 +227,31 @@ describe('UsersService', () => {
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(user.email).toBe('old@b.com');
       expect(user.emailVerificationAttempts).toBe(1);
+    });
+  });
+
+  describe('deleteUnverifiedAccounts', () => {
+    // Freeze the clock so the cutoff can be checked exactly
+    const now = new Date('2030-01-15T12:00:00Z');
+
+    beforeEach(() => jest.useFakeTimers({ now }));
+    afterEach(() => jest.useRealTimers());
+
+    it('deletes unverified accounts untouched for 7 days', async () => {
+      const query = {
+        delete: jest.fn().mockReturnThis(),
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue({ affected: 3 }),
+      };
+      usersRepository.createQueryBuilder.mockReturnValue(query);
+
+      await expect(service.deleteUnverifiedAccounts()).resolves.toBe(3);
+
+      expect(query.where).toHaveBeenCalledWith('"isEmailVerified" = false');
+      const cutoff: Date = query.andWhere.mock.calls[0][1].cutoff;
+      expect(cutoff).toEqual(new Date('2030-01-08T12:00:00Z'));
     });
   });
 });

@@ -9,6 +9,7 @@ import { User } from '../users/entities/user.entity';
 import { Car } from '../cars/entities/car.entity';
 
 import { AuthModule } from '../auth/auth.module';
+import { EmailModule } from '../email/email.module';
 
 
 @Module({
@@ -21,6 +22,8 @@ import { AuthModule } from '../auth/auth.module';
     ]),
 
     AuthModule,
+
+    EmailModule,
   ],
 
   controllers: [

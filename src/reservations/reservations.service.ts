@@ -3,13 +3,17 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 
+import { ConfigService } from '@nestjs/config';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   In,
   LessThan,
+  LessThanOrEqual,
   MoreThan,
   Repository,
 } from 'typeorm';
@@ -20,6 +24,7 @@ import { UpdateReservationStatusDto } from './dto/update-reservation-status.dto'
 
 import { User } from '../users/entities/user.entity';
 import { Car } from '../cars/entities/car.entity';
+import { EmailService } from '../email/email.service';
 
 
 // Shortest reservation allowed
@@ -35,6 +40,8 @@ const DURATION_DISCOUNTS = [
 @Injectable()
 export class ReservationsService {
 
+  private readonly logger = new Logger(ReservationsService.name);
+
   constructor(
 
     @InjectRepository(Reservation)
@@ -47,6 +54,12 @@ export class ReservationsService {
 
     @InjectRepository(Car)
     private readonly carsRepository: Repository<Car>,
+
+
+    private readonly emailService: EmailService,
+
+
+    private readonly configService: ConfigService,
 
   ) { }
 
@@ -455,9 +468,12 @@ export class ReservationsService {
       ReservationStatus.CONFIRMED;
 
 
-    return this.reservationsRepository.save(
-      reservation,
-    );
+    const savedReservation =
+      await this.reservationsRepository.save(reservation);
+
+    await this.notifyStatusChange(savedReservation.id);
+
+    return savedReservation;
 
   }
 
@@ -509,9 +525,12 @@ export class ReservationsService {
       ReservationStatus.COMPLETED;
 
 
-    return this.reservationsRepository.save(
-      reservation,
-    );
+    const savedReservation =
+      await this.reservationsRepository.save(reservation);
+
+    await this.notifyStatusChange(savedReservation.id);
+
+    return savedReservation;
 
   }
 
@@ -577,9 +596,12 @@ export class ReservationsService {
       ReservationStatus.CANCELLED;
 
 
-    return this.reservationsRepository.save(
-      reservation,
-    );
+    const savedReservation =
+      await this.reservationsRepository.save(reservation);
+
+    await this.notifyStatusChange(savedReservation.id);
+
+    return savedReservation;
 
   }
 
@@ -686,9 +708,12 @@ export class ReservationsService {
     }
 
 
-    return this.reservationsRepository.save(
-      reservation,
-    );
+    const savedReservation =
+      await this.reservationsRepository.save(reservation);
+
+    await this.notifyStatusChange(savedReservation.id);
+
+    return savedReservation;
 
   }
 
@@ -774,6 +799,121 @@ export class ReservationsService {
       date.getUTCSeconds() === 0 &&
       date.getUTCMilliseconds() === 0
     );
+
+  }
+
+
+
+  // Every hour, cancel PENDING reservations the admin did not confirm in
+  // time, so they stop blocking the car. A reservation expires when
+  // whichever comes first: PENDING_RESERVATION_TTL_HOURS (default 24)
+  // have passed since it was created, or its start date has arrived.
+  @Cron(CronExpression.EVERY_HOUR)
+  async expirePendingReservations() {
+
+    const ttlHours = Number(
+      this.configService.get<string>('PENDING_RESERVATION_TTL_HOURS') || 24,
+    );
+
+    const now = new Date();
+
+    const createdBefore = new Date(
+      now.getTime() - ttlHours * 60 * 60 * 1000,
+    );
+
+
+    const expiredReservations =
+      await this.reservationsRepository.find({
+
+        // Each object is an OR condition
+        where: [
+          {
+            status: ReservationStatus.PENDING,
+            createdAt: LessThanOrEqual(createdBefore),
+          },
+          {
+            status: ReservationStatus.PENDING,
+            startDate: LessThanOrEqual(now),
+          },
+        ],
+
+      });
+
+
+    for (const reservation of expiredReservations) {
+
+      reservation.status = ReservationStatus.CANCELLED;
+
+      await this.reservationsRepository.save(reservation);
+
+      await this.notifyStatusChange(reservation.id);
+
+    }
+
+
+    if (expiredReservations.length > 0) {
+      this.logger.log(
+        `Cancelled ${expiredReservations.length} unconfirmed reservation(s)`,
+      );
+    }
+
+
+    return expiredReservations.length;
+
+  }
+
+
+
+  // Email the user when their reservation is confirmed, cancelled or
+  // completed. A failed email must not undo the status change, so errors
+  // are only logged.
+  private async notifyStatusChange(reservationId: number) {
+
+    try {
+
+      const reservation =
+        await this.reservationsRepository.findOne({
+
+          where: {
+            id: reservationId,
+          },
+
+          relations: {
+            user: true,
+            car: true,
+          },
+
+        });
+
+
+      if (
+        !reservation ||
+        reservation.status === ReservationStatus.PENDING
+      ) {
+        return;
+      }
+
+
+      await this.emailService.sendReservationStatus(
+        reservation.user.email,
+        {
+          fullName: reservation.user.fullName,
+          reservationId: reservation.id,
+          status: reservation.status,
+          car: `${reservation.car.brand} ${reservation.car.model}`,
+          startDate: reservation.startDate,
+          endDate: reservation.endDate,
+          totalPrice: reservation.totalPrice,
+        },
+      );
+
+    } catch (error) {
+
+      this.logger.warn(
+        `Could not send status email for reservation ${reservationId}: ${(error as Error).message}`,
+      );
+
+    }
 
   }
 

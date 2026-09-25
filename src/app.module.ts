@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -12,6 +13,8 @@ import { CarCategoriesModule } from './car-categories/car-categories.module';
 import { CarsModule } from './cars/cars.module';
 import { AuthModule } from './auth/auth.module';
 import { ReservationsModule } from './reservations/reservations.module';
+import { ReviewsModule } from './reviews/reviews.module';
+import { StatsModule } from './stats/stats.module';
 import { EmailModule } from './email/email.module';
 
 @Module({
@@ -51,12 +54,17 @@ import { EmailModule } from './email/email.module';
       },
     ]),
 
+    // Runs scheduled jobs such as expiring unconfirmed reservations
+    ScheduleModule.forRoot(),
+
     // Application feature modules
     UsersModule,
     CarCategoriesModule,
     CarsModule,
     AuthModule,
     ReservationsModule,
+    ReviewsModule,
+    StatsModule,
     EmailModule,
   ],
 

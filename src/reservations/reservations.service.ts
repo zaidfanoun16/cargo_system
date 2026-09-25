@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -245,7 +246,7 @@ export class ReservationsService {
       role !== 'ADMIN' &&
       reservation.userId !== userId
     ) {
-      throw new BadRequestException(
+      throw new ForbiddenException(
         'You can only view your own reservation',
       );
     }
@@ -499,7 +500,7 @@ export class ReservationsService {
       role !== 'ADMIN' &&
       reservation.userId !== userId
     ) {
-      throw new BadRequestException(
+      throw new ForbiddenException(
         'You can only cancel your own reservation',
       );
     }

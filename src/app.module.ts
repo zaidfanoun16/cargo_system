@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -40,6 +42,15 @@ import { EmailModule } from './email/email.module';
       }),
     }),
 
+    // Rate limiting: each client IP gets at most 100 requests per minute.
+    // Sensitive routes set a lower limit with @Throttle().
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60_000,
+        limit: 100,
+      },
+    ]),
+
     // Application feature modules
     UsersModule,
     CarCategoriesModule,
@@ -50,6 +61,14 @@ import { EmailModule } from './email/email.module';
   ],
 
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+
+    // Apply rate limiting to every route
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule {}

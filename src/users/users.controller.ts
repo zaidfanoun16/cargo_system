@@ -13,6 +13,10 @@ import {
 import type { Request } from 'express';
 
 import { UsersService } from './users.service';
+import {
+  EmailRateLimit,
+  StrictRateLimit,
+} from '../common/decorators/rate-limit.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -74,6 +78,7 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @StrictRateLimit()
   @Patch('profile/password')
   changePassword(
     @Body() changePasswordDto: ChangePasswordDto,
@@ -92,6 +97,7 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @EmailRateLimit()
   @Patch('profile/email')
   requestEmailChange(
     @Body() changeEmailDto: ChangeEmailDto,
@@ -110,6 +116,7 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @StrictRateLimit()
   @Post('profile/email/confirm')
   confirmEmailChange(
     @Body() confirmEmailChangeDto: ConfirmEmailChangeDto,

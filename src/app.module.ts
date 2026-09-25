@@ -14,6 +14,7 @@ import { CarsModule } from './cars/cars.module';
 import { AuthModule } from './auth/auth.module';
 import { ReservationsModule } from './reservations/reservations.module';
 import { ReviewsModule } from './reviews/reviews.module';
+import { FavoritesModule } from './favorites/favorites.module';
 import { StatsModule } from './stats/stats.module';
 import { EmailModule } from './email/email.module';
 
@@ -64,6 +65,7 @@ import { EmailModule } from './email/email.module';
     AuthModule,
     ReservationsModule,
     ReviewsModule,
+    FavoritesModule,
     StatsModule,
     EmailModule,
   ],

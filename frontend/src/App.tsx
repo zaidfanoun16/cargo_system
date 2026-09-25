@@ -10,7 +10,6 @@ import { HomePage } from './pages/HomePage'
 
 // The home page loads right away; the other pages download only when
 // they are opened, so the first visit stays fast on phones
-const ComingSoonPage = lazy(() => import('./pages/ComingSoonPage').then((m) => ({ default: m.ComingSoonPage })))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })))
 const LoginPage = lazy(() => import('./pages/auth/LoginPage').then((m) => ({ default: m.LoginPage })))
 const RegisterPage = lazy(() => import('./pages/auth/RegisterPage').then((m) => ({ default: m.RegisterPage })))
@@ -20,6 +19,10 @@ const ForgotPasswordPage = lazy(() =>
 )
 const MyBookingsPage = lazy(() =>
   import('./pages/bookings/MyBookingsPage').then((m) => ({ default: m.MyBookingsPage })),
+)
+const AccountPage = lazy(() => import('./pages/account/AccountPage').then((m) => ({ default: m.AccountPage })))
+const FavoritesPage = lazy(() =>
+  import('./pages/favorites/FavoritesPage').then((m) => ({ default: m.FavoritesPage })),
 )
 const CarsPage = lazy(() => import('./pages/cars/CarsPage').then((m) => ({ default: m.CarsPage })))
 const CarDetailsPage = lazy(() => import('./pages/car/CarDetailsPage').then((m) => ({ default: m.CarDetailsPage })))
@@ -47,6 +50,14 @@ export default function App() {
                     </RequireAuth>
                   }
                 />
+                <Route
+                  path="favorites"
+                  element={
+                    <RequireAuth>
+                      <FavoritesPage />
+                    </RequireAuth>
+                  }
+                />
                 <Route path="login" element={<LoginPage />} />
                 <Route path="register" element={<RegisterPage />} />
                 <Route path="verify-email" element={<VerifyEmailPage />} />
@@ -56,7 +67,7 @@ export default function App() {
                   path="account"
                   element={
                     <RequireAuth>
-                      <ComingSoonPage titleKey="nav.account" />
+                      <AccountPage />
                     </RequireAuth>
                   }
                 />

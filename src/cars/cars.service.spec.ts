@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
-import { In, Not } from 'typeorm';
+import { ILike, In, Not } from 'typeorm';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Car } from './entities/car.entity';
@@ -177,6 +177,35 @@ describe('CarsService', () => {
     });
   });
 
+  describe('findAll by name', () => {
+    beforeEach(() => {
+      carsRepository.findAndCount.mockResolvedValue([[], 0]);
+    });
+
+    const whereOfLastSearch = () =>
+      carsRepository.findAndCount.mock.calls[0][0].where;
+
+    it('matches the brand in English or Arabic', async () => {
+      await service.findAll({ brand: 'تويوتا', categoryId: 3 });
+
+      expect(whereOfLastSearch()).toEqual([
+        { brand: ILike('%تويوتا%'), category: { id: 3 } },
+        { brandAr: ILike('%تويوتا%'), category: { id: 3 } },
+      ]);
+    });
+
+    it('requires both brand and model to match', async () => {
+      await service.findAll({ brand: 'Toyota', model: 'كامري' });
+
+      expect(whereOfLastSearch()).toEqual([
+        { brand: ILike('%Toyota%'), model: ILike('%كامري%') },
+        { brand: ILike('%Toyota%'), modelAr: ILike('%كامري%') },
+        { brandAr: ILike('%Toyota%'), model: ILike('%كامري%') },
+        { brandAr: ILike('%Toyota%'), modelAr: ILike('%كامري%') },
+      ]);
+    });
+  });
+
   describe('findAll by dates', () => {
     beforeEach(() => {
       carsRepository.findAndCount.mockResolvedValue([[], 0]);
@@ -197,17 +226,19 @@ describe('CarsService', () => {
         endDate: '2030-10-15',
       });
 
-      expect(whereOfLastSearch()).toMatchObject({
-        status: 'AVAILABLE',
-        id: Not(In([1, 2])),
-      });
+      expect(whereOfLastSearch()).toEqual([
+        expect.objectContaining({
+          status: 'AVAILABLE',
+          id: Not(In([1, 2])),
+        }),
+      ]);
     });
 
     it('does not filter by reservations without dates', async () => {
       await service.findAll({});
 
       expect(reservationsRepository.find).not.toHaveBeenCalled();
-      expect(whereOfLastSearch().id).toBeUndefined();
+      expect(whereOfLastSearch()).toEqual([{}]);
     });
 
     it('requires both dates', async () => {

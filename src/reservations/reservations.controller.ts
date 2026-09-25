@@ -6,6 +6,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -15,6 +16,7 @@ import type { Request } from 'express';
 import { ReservationsService } from './reservations.service';
 
 import { CreateReservationDto } from './dto/create-reservation.dto';
+import { QuoteReservationDto } from './dto/quote-reservation.dto';
 import { UpdateReservationStatusDto } from './dto/update-reservation-status.dto';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -52,6 +54,14 @@ export class ReservationsController {
 
   }
 
+
+
+  // PUBLIC: price and availability before booking
+  // (declared before ':id' so "quote" is not read as an id)
+  @Get('quote')
+  quote(@Query() quoteDto: QuoteReservationDto) {
+    return this.reservationsService.quote(quoteDto);
+  }
 
 
   // USER views his own reservations

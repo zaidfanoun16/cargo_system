@@ -79,18 +79,8 @@ export class ReservationsService {
     },
   ) {
 
-    const car = await this.carsRepository.findOne({
-      where: {
-        id: createReservationDto.carId,
-      },
-    });
-
-
-    if (!car) {
-      throw new NotFoundException(
-        'Car not found',
-      );
-    }
+    const { car, startDate, endDate } =
+      await this.loadCarAndPeriod(createReservationDto);
 
 
     // Check car status before creating reservation
@@ -107,12 +97,138 @@ export class ReservationsService {
     }
 
 
+    // Check if the car is already reserved
+    // during the selected dates
+    if (await this.isReservedDuring(car.id, startDate, endDate)) {
+      throw new ConflictException(
+        'Car is already reserved for the selected dates',
+      );
+    }
+
+
+    const reservation =
+      this.reservationsRepository.create({
+
+        userId: currentUser.userId,
+
+        carId: car.id,
+
+        startDate,
+
+        endDate,
+
+        ...this.calculatePrice(
+          Number(car.pricePerDay),
+          car.pricePerHour == null ? null : Number(car.pricePerHour),
+          startDate,
+          endDate,
+        ),
+
+      });
+
+
+    return this.reservationsRepository.save(
+      reservation,
+    );
+
+  }
+
+
+
+  // PUBLIC: Price a period before booking it. Runs the same checks
+  // and pricing as create(), so the quote always matches the booking,
+  // and says whether the car can be reserved for that period.
+  async quote(
+    quoteDto: {
+      carId: number;
+      startDate: string;
+      endDate: string;
+    },
+  ) {
+
+    const { car, startDate, endDate } =
+      await this.loadCarAndPeriod(quoteDto);
+
+
+    let unavailableReason:
+      | 'maintenance'
+      | 'inactive'
+      | 'reserved'
+      | null = null;
+
+    if (car.status === 'MAINTENANCE') {
+      unavailableReason = 'maintenance';
+    } else if (car.status === 'INACTIVE') {
+      unavailableReason = 'inactive';
+    } else if (
+      await this.isReservedDuring(car.id, startDate, endDate)
+    ) {
+      unavailableReason = 'reserved';
+    }
+
+
+    const hours = Math.ceil(
+      (endDate.getTime() - startDate.getTime()) / (60 * 60 * 1000),
+    );
+
+
+    return {
+
+      carId: car.id,
+
+      startDate,
+
+      endDate,
+
+      hours,
+
+      available: unavailableReason === null,
+
+      unavailableReason,
+
+      ...this.calculatePrice(
+        Number(car.pricePerDay),
+        car.pricePerHour == null ? null : Number(car.pricePerHour),
+        startDate,
+        endDate,
+      ),
+
+    };
+
+  }
+
+
+
+  // Loads the car and validates the requested period
+  // (shared by create and quote)
+  private async loadCarAndPeriod(
+    periodDto: {
+      carId: number;
+      startDate: string;
+      endDate: string;
+    },
+  ) {
+
+    const car = await this.carsRepository.findOne({
+      where: {
+        id: periodDto.carId,
+      },
+    });
+
+
+    if (!car) {
+      throw new NotFoundException(
+        'Car not found',
+      );
+    }
+
+
     const startDate = new Date(
-      createReservationDto.startDate,
+      periodDto.startDate,
     );
 
     const endDate = new Date(
-      createReservationDto.endDate,
+      periodDto.endDate,
     );
 
 
@@ -153,13 +269,25 @@ export class ReservationsService {
     }
 
 
-    // Check if the car is already reserved
-    // during the selected dates
+    return { car, startDate, endDate };
+
+  }
+
+
+
+  // True when an active (PENDING or CONFIRMED) reservation
+  // overlaps the period
+  private async isReservedDuring(
+    carId: number,
+    startDate: Date,
+    endDate: Date,
+  ) {
+
     const existingReservation =
       await this.reservationsRepository.findOne({
 
         where: {
-          carId: car.id,
+          carId,
 
           status: In([
             ReservationStatus.PENDING,
@@ -174,37 +302,7 @@ export class ReservationsService {
       });
 
 
-    if (existingReservation) {
-      throw new ConflictException(
-        'Car is already reserved for the selected dates',
-      );
-    }
-
-
-    const reservation =
-      this.reservationsRepository.create({
-
-        userId: currentUser.userId,
-
-        carId: car.id,
-
-        startDate,
-
-        endDate,
-
-        ...this.calculatePrice(
-          Number(car.pricePerDay),
-          car.pricePerHour == null ? null : Number(car.pricePerHour),
-          startDate,
-          endDate,
-        ),
-
-      });
-
-
-    return this.reservationsRepository.save(
-      reservation,
-    );
+    return Boolean(existingReservation);
 
   }
 

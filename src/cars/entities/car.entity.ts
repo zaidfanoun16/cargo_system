@@ -27,6 +27,14 @@ export class Car {
   @Column({ length: 100 })
   model: string;
 
+  // Arabic names shown when the site is in Arabic, e.g. تويوتا / كورولا.
+  // Optional: the English name is shown when they are empty.
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  brandAr: string | null;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  modelAr: string | null;
+
   @Column({ length: 50, unique: true })
   licensePlate: string;
 
@@ -64,6 +72,10 @@ export class Car {
 
   @Column({ length: 100 })
   color: string;
+
+  // Arabic color, e.g. أبيض
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  colorAr: string | null;
 
   // Current car status
   @Column({

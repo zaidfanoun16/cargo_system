@@ -4,6 +4,8 @@ import { BadRequestException, ConflictException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { User } from './entities/user.entity';
 import { Reservation } from '../reservations/entities/reservation.entity';
+import { EmailService } from '../email/email.service';
+import { hashVerificationCode } from '../common/verification/verification-code';
 import { UsersService } from './users.service';
 
 describe('UsersService', () => {
@@ -16,6 +18,7 @@ describe('UsersService', () => {
     save: jest.fn(),
   };
   const reservationsRepository = { count: jest.fn() };
+  const emailService = { sendVerificationCode: jest.fn() };
 
   beforeEach(async () => {
     jest.resetAllMocks();
@@ -28,6 +31,7 @@ describe('UsersService', () => {
           provide: getRepositoryToken(Reservation),
           useValue: reservationsRepository,
         },
+        { provide: EmailService, useValue: emailService },
       ],
     }).compile();
 
@@ -123,6 +127,101 @@ describe('UsersService', () => {
         }),
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(usersRepository.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('email change', () => {
+    let user: Record<string, any>;
+
+    beforeEach(async () => {
+      user = {
+        id: 1,
+        fullName: 'A',
+        email: 'old@b.com',
+        passwordHash: await bcrypt.hash('password123', 4),
+        pendingEmail: null,
+        emailVerificationToken: null,
+        emailVerificationExpiresAt: null,
+        emailVerificationAttempts: 0,
+      };
+      usersRepository.save.mockImplementation(async (u) => u);
+    });
+
+    it('sends a code to the new email without changing the email yet', async () => {
+      usersRepository.findOne
+        .mockResolvedValueOnce(user) // the current user
+        .mockResolvedValueOnce(null); // new email is free
+
+      await service.requestEmailChange(1, {
+        newEmail: 'new@b.com',
+        password: 'password123',
+      });
+
+      expect(user.email).toBe('old@b.com');
+      expect(user.pendingEmail).toBe('new@b.com');
+      expect(emailService.sendVerificationCode).toHaveBeenCalledWith(
+        'new@b.com',
+        'A',
+        expect.stringMatching(/^\d{6}$/),
+        expect.any(String),
+      );
+    });
+
+    it('rejects a wrong password', async () => {
+      usersRepository.findOne.mockResolvedValueOnce(user);
+
+      await expect(
+        service.requestEmailChange(1, {
+          newEmail: 'new@b.com',
+          password: 'wrong',
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(emailService.sendVerificationCode).not.toHaveBeenCalled();
+    });
+
+    it('rejects an email used by another account', async () => {
+      usersRepository.findOne
+        .mockResolvedValueOnce(user)
+        .mockResolvedValueOnce({ id: 2 });
+
+      await expect(
+        service.requestEmailChange(1, {
+          newEmail: 'taken@b.com',
+          password: 'password123',
+        }),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('changes the email once the code is confirmed', async () => {
+      Object.assign(user, {
+        pendingEmail: 'new@b.com',
+        emailVerificationToken: hashVerificationCode('123456'),
+        emailVerificationExpiresAt: new Date(Date.now() + 60_000),
+      });
+      usersRepository.findOne
+        .mockResolvedValueOnce(user)
+        .mockResolvedValueOnce(null);
+
+      await service.confirmEmailChange(1, '123456');
+
+      expect(user.email).toBe('new@b.com');
+      expect(user.pendingEmail).toBeNull();
+      expect(user.emailVerificationToken).toBeNull();
+    });
+
+    it('keeps the old email when the code is wrong', async () => {
+      Object.assign(user, {
+        pendingEmail: 'new@b.com',
+        emailVerificationToken: hashVerificationCode('123456'),
+        emailVerificationExpiresAt: new Date(Date.now() + 60_000),
+      });
+      usersRepository.findOne.mockResolvedValueOnce(user);
+
+      await expect(
+        service.confirmEmailChange(1, '000000'),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(user.email).toBe('old@b.com');
+      expect(user.emailVerificationAttempts).toBe(1);
     });
   });
 });

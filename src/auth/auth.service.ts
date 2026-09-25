@@ -9,17 +9,15 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { Repository } from 'typeorm';
-import { createHash, randomInt, timingSafeEqual } from 'crypto';
 
 import { User } from '../users/entities/user.entity';
 import { CreateUserDto } from '../users/dto/create-user.dto';
 import { EmailService } from '../email/email.service';
-
-// How long a verification code stays valid
-const VERIFICATION_CODE_TTL_MS = 10 * 60 * 1000;
-
-// Wrong attempts allowed before the user must request a new code
-const MAX_VERIFICATION_ATTEMPTS = 5;
+import {
+  checkVerificationCode,
+  clearVerificationCode,
+  setVerificationCode,
+} from '../common/verification/verification-code';
 
 @Injectable()
 export class AuthService {
@@ -53,13 +51,17 @@ export class AuthService {
     user.email = createUserDto.email;
     user.passwordHash = passwordHash;
 
-    const code = this.setVerificationCode(user);
+    const code = setVerificationCode(user);
 
     // Save the user
     const savedUser = await this.usersRepository.save(user);
 
     // Send the verification code
-    await this.sendVerificationCode(savedUser, code);
+    await this.emailService.sendVerificationCode(
+      savedUser.email,
+      savedUser.fullName,
+      code,
+    );
 
     // Remove sensitive fields from the response
     const {
@@ -67,6 +69,7 @@ export class AuthService {
       emailVerificationToken: _emailVerificationToken,
       emailVerificationExpiresAt: _emailVerificationExpiresAt,
       emailVerificationAttempts: _emailVerificationAttempts,
+      pendingEmail: _pendingEmail,
       refreshToken: _refreshToken,
       ...safeUser
     } = savedUser;
@@ -137,6 +140,7 @@ export class AuthService {
       emailVerificationToken: _emailVerificationToken,
       emailVerificationExpiresAt: _emailVerificationExpiresAt,
       emailVerificationAttempts: _emailVerificationAttempts,
+      pendingEmail: _pendingEmail,
       ...safeUser
     } = user;
 
@@ -158,35 +162,25 @@ export class AuthService {
       where: { email },
     });
 
-    // Reject if the user does not exist or has no pending code
-    if (!user || user.isEmailVerified || !user.emailVerificationToken) {
+    // Reject if the user does not exist or is already verified
+    if (!user || user.isEmailVerified) {
       throw invalidCode;
     }
 
-    // Reject if the code has expired
-    if (
-      !user.emailVerificationExpiresAt ||
-      user.emailVerificationExpiresAt < new Date()
-    ) {
-      throw invalidCode;
-    }
+    const result = checkVerificationCode(user, code);
 
     // Stop guessing: after too many wrong attempts a new code is required
-    if (user.emailVerificationAttempts >= MAX_VERIFICATION_ATTEMPTS) {
+    if (result === 'too-many-attempts') {
       throw new BadRequestException(
         'Too many wrong attempts, please request a new code',
       );
     }
 
-    // Compare hashes in constant time
-    const isCodeValid = timingSafeEqual(
-      Buffer.from(this.hashVerificationCode(code)),
-      Buffer.from(user.emailVerificationToken),
-    );
-
-    if (!isCodeValid) {
-      user.emailVerificationAttempts += 1;
-      await this.usersRepository.save(user);
+    if (result !== 'valid') {
+      // Save the incremented attempts counter
+      if (result === 'wrong') {
+        await this.usersRepository.save(user);
+      }
 
       throw invalidCode;
     }
@@ -195,9 +189,7 @@ export class AuthService {
     user.isEmailVerified = true;
 
     // Remove the code so it cannot be reused
-    user.emailVerificationToken = null;
-    user.emailVerificationExpiresAt = null;
-    user.emailVerificationAttempts = 0;
+    clearVerificationCode(user);
 
     // Save the verified user
     await this.usersRepository.save(user);
@@ -224,80 +216,21 @@ export class AuthService {
     }
 
     // Generate a new code and reset the attempts counter
-    const code = this.setVerificationCode(user);
+    const code = setVerificationCode(user);
 
     // Save the new code
     await this.usersRepository.save(user);
 
     // Send the new code
-    await this.sendVerificationCode(user, code);
+    await this.emailService.sendVerificationCode(
+      user.email,
+      user.fullName,
+      code,
+    );
 
     return {
       message: 'Verification code sent successfully',
     };
-  }
-
-  // Generate a new 6-digit code and store only its hash on the user.
-  // Returns the plain code so it can be emailed.
-  private setVerificationCode(user: User) {
-    const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
-
-    user.emailVerificationToken = this.hashVerificationCode(code);
-    user.emailVerificationExpiresAt = new Date(
-      Date.now() + VERIFICATION_CODE_TTL_MS,
-    );
-    user.emailVerificationAttempts = 0;
-
-    return code;
-  }
-
-  private hashVerificationCode(code: string) {
-    return createHash('sha256').update(code).digest('hex');
-  }
-
-  private async sendVerificationCode(user: User, code: string) {
-    await this.emailService.sendEmail(
-      user.email,
-      'Your Cargo System verification code',
-      `
-        <div style="
-          font-family: Arial, sans-serif;
-          max-width: 500px;
-          margin: 0 auto;
-          padding: 30px;
-          text-align: center;
-          color: #333;
-        ">
-
-          <h2 style="margin-bottom: 10px;">
-            Welcome to Cargo System 🚗
-          </h2>
-
-          <p style="font-size: 16px;">
-            Hi ${user.fullName},
-          </p>
-
-          <p style="font-size: 15px; line-height: 1.6;">
-            Enter this code to verify your email:
-          </p>
-
-          <p style="
-            margin: 20px 0;
-            font-size: 32px;
-            font-weight: bold;
-            letter-spacing: 8px;
-            color: #2563eb;
-          ">
-            ${code}
-          </p>
-
-          <p style="font-size: 13px; color: #777;">
-            This code expires in 10 minutes.
-          </p>
-
-        </div>
-      `,
-    );
   }
 
   async refreshAccessToken(refreshToken: string) {

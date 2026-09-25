@@ -46,4 +46,55 @@ export class EmailService {
 
     return data;
   }
+
+  // Email a 6-digit verification code
+  async sendVerificationCode(
+    to: string,
+    fullName: string,
+    code: string,
+    message = 'Enter this code to verify your email:',
+  ) {
+    await this.sendEmail(
+      to,
+      'Your Cargo System verification code',
+      `
+        <div style="
+          font-family: Arial, sans-serif;
+          max-width: 500px;
+          margin: 0 auto;
+          padding: 30px;
+          text-align: center;
+          color: #333;
+        ">
+
+          <h2 style="margin-bottom: 10px;">
+            Cargo System 🚗
+          </h2>
+
+          <p style="font-size: 16px;">
+            Hi ${fullName},
+          </p>
+
+          <p style="font-size: 15px; line-height: 1.6;">
+            ${message}
+          </p>
+
+          <p style="
+            margin: 20px 0;
+            font-size: 32px;
+            font-weight: bold;
+            letter-spacing: 8px;
+            color: #2563eb;
+          ">
+            ${code}
+          </p>
+
+          <p style="font-size: 13px; color: #777;">
+            This code expires in 10 minutes.
+          </p>
+
+        </div>
+      `,
+    );
+  }
 }

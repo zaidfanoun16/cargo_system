@@ -20,6 +20,10 @@ export class User {
   @Column({ unique: true, length: 150 })
   email: string;
 
+  // New email waiting to be confirmed with a code before replacing email.
+  @Column({ type: 'varchar', length: 150, nullable: true })
+  pendingEmail: string | null;
+
   // Email verification status.
   @Column({ default: false })
   isEmailVerified: boolean;

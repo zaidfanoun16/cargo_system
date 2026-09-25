@@ -19,7 +19,7 @@ describe('AuthService', () => {
     create: jest.fn(),
     save: jest.fn(),
   };
-  const emailService = { sendEmail: jest.fn() };
+  const emailService = { sendVerificationCode: jest.fn() };
   const jwtService = { verifyAsync: jest.fn(), signAsync: jest.fn() };
 
   beforeEach(async () => {
@@ -150,8 +150,9 @@ describe('AuthService', () => {
         password: 'password123',
       });
 
-      const html: string = emailService.sendEmail.mock.calls[0][2];
-      const code = html.match(/\b\d{6}\b/)![0];
+      const code: string = emailService.sendVerificationCode.mock.calls[0][2];
+
+      expect(code).toMatch(/^\d{6}$/);
       const savedUser = usersRepository.save.mock.calls[0][0];
 
       expect(savedUser.emailVerificationToken).toBe(hash(code));

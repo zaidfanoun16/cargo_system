@@ -23,7 +23,7 @@ export class EmailService {
     this.resend = new Resend(apiKey);
 
     this.from =
-      this.configService.get<string>('EMAIL_FROM') ?? 'onboarding@resend.dev';
+      this.configService.get<string>('EMAIL_FROM') || 'onboarding@resend.dev';
   }
 
   async sendEmail(

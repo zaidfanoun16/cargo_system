@@ -44,7 +44,8 @@ describe('ReservationsService', () => {
 
   describe('create', () => {
     beforeEach(() => {
-      carsRepository.findOne.mockResolvedValue({ id: 5 });
+      // PostgreSQL returns decimals as strings
+      carsRepository.findOne.mockResolvedValue({ id: 5, pricePerDay: '50.00' });
       reservationsRepository.create.mockImplementation((data) => data);
       reservationsRepository.save.mockImplementation(async (data) => data);
     });
@@ -57,6 +58,32 @@ describe('ReservationsService', () => {
         carId: 5,
       });
       expect(reservationsRepository.save).toHaveBeenCalled();
+    });
+
+    it('stores the total price for the reserved days', async () => {
+      reservationsRepository.findOne.mockResolvedValue(null);
+
+      // 2030-10-12 → 2030-10-18 is 6 days at 50/day
+      await expect(service.create(dto, currentUser)).resolves.toMatchObject({
+        totalPrice: 300,
+      });
+    });
+
+    it('rounds a partial day up and keeps cents exact', async () => {
+      reservationsRepository.findOne.mockResolvedValue(null);
+      carsRepository.findOne.mockResolvedValue({ id: 5, pricePerDay: '19.99' });
+
+      // 2 days and 1 hour counts as 3 days
+      await expect(
+        service.create(
+          {
+            carId: 5,
+            startDate: '2030-10-12T10:00:00Z',
+            endDate: '2030-10-14T11:00:00Z',
+          },
+          currentUser,
+        ),
+      ).resolves.toMatchObject({ totalPrice: 59.97 });
     });
 
     it('rejects dates that overlap an active reservation', async () => {

@@ -42,6 +42,19 @@ describe('EmailService', () => {
     );
   });
 
+  it('falls back to the test sender when EMAIL_FROM is empty', async () => {
+    const { service, send } = await createService({
+      RESEND_API_KEY: 'key',
+      EMAIL_FROM: '',
+    });
+
+    await service.sendEmail('a@b.com', 'Subject', '<p>Hi</p>');
+
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({ from: 'onboarding@resend.dev' }),
+    );
+  });
+
   it("falls back to Resend's test sender", async () => {
     const { service, send } = await createService({ RESEND_API_KEY: 'key' });
 

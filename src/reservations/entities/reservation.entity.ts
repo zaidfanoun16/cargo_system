@@ -27,6 +27,21 @@ export class Reservation {
   endDate: Date;
 
 
+  // Price for the whole reservation, fixed when it is created so later
+  // changes to the car's pricePerDay do not affect it.
+  // PostgreSQL returns decimals as strings, so convert them to numbers.
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => Number(value),
+    },
+  })
+  totalPrice: number;
+
+
   @Column({
     type: 'enum',
     enum: ReservationStatus,

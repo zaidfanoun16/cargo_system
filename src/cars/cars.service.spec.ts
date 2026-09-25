@@ -6,6 +6,7 @@ import { Car } from './entities/car.entity';
 import { CarCategory } from '../car-categories/entities/car-category.entity';
 import { Reservation } from '../reservations/entities/reservation.entity';
 import { CarsService } from './cars.service';
+import { ReviewsService } from '../reviews/reviews.service';
 
 describe('CarsService', () => {
   let service: CarsService;
@@ -28,6 +29,10 @@ describe('CarsService', () => {
         {
           provide: getRepositoryToken(Reservation),
           useValue: reservationsRepository,
+        },
+        {
+          provide: ReviewsService,
+          useValue: { getRatings: async () => new Map() },
         },
       ],
     }).compile();

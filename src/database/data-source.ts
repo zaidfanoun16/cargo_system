@@ -6,6 +6,7 @@ import { User } from '../users/entities/user.entity';
 import { Car } from '../cars/entities/car.entity';
 import { CarCategory } from '../car-categories/entities/car-category.entity';
 import { Reservation } from '../reservations/entities/reservation.entity';
+import { Review } from '../reviews/entities/review.entity';
 
 
 export default new DataSource({
@@ -27,6 +28,7 @@ export default new DataSource({
     Car,
     CarCategory,
     Reservation,
+    Review,
   ],
 
   migrations: [

@@ -41,7 +41,7 @@ export class CarsController {
   // GET /cars/:id - Public
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.carsService.findOne(id);
+    return this.carsService.findOneWithRating(id);
   }
 
   // PATCH /cars/:id - Admin only

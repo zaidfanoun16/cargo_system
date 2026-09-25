@@ -9,6 +9,7 @@ import { Car } from './entities/car.entity';
 import { CarCategory } from '../car-categories/entities/car-category.entity';
 import { Reservation } from '../reservations/entities/reservation.entity';
 import { AuthModule } from '../auth/auth.module';
+import { ReviewsModule } from '../reviews/reviews.module';
 
 @Module({
   imports: [
@@ -19,6 +20,8 @@ import { AuthModule } from '../auth/auth.module';
     TypeOrmModule.forFeature([Car, CarCategory, Reservation]),
 
     AuthModule,
+
+    ReviewsModule,
   ],
   controllers: [CarsController],
   providers: [CarsService],

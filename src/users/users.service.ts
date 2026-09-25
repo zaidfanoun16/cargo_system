@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -9,6 +10,7 @@ import { Repository } from 'typeorm';
 
 import { UpdateUserDto } from './dto/update-user.dto';
 import { User } from './entities/user.entity';
+import { Reservation } from '../reservations/entities/reservation.entity';
 
 type CurrentUser = {
   userId: number;
@@ -21,6 +23,9 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
+
+    @InjectRepository(Reservation)
+    private readonly reservationsRepository: Repository<Reservation>,
   ) { }
 
   // Remove sensitive data before returning the user to the client
@@ -147,6 +152,18 @@ export class UsersService {
 
     if (!user) {
       throw new NotFoundException(`User with ID ${id} not found`);
+    }
+
+    // Reservations reference the user, so deleting them would fail and
+    // erase the rental history
+    const reservationsCount = await this.reservationsRepository.count({
+      where: { userId: id },
+    });
+
+    if (reservationsCount > 0) {
+      throw new ConflictException(
+        'Cannot delete user because they have reservations.',
+      );
     }
 
     await this.usersRepository.remove(user);

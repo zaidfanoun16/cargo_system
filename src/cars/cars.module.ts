@@ -7,6 +7,7 @@ import { CarsService } from './cars.service';
 import { Car } from './entities/car.entity';
 
 import { CarCategory } from '../car-categories/entities/car-category.entity';
+import { Reservation } from '../reservations/entities/reservation.entity';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
@@ -15,7 +16,7 @@ import { AuthModule } from '../auth/auth.module';
       defaultStrategy: 'jwt',
     }),
 
-    TypeOrmModule.forFeature([Car, CarCategory]),
+    TypeOrmModule.forFeature([Car, CarCategory, Reservation]),
 
     AuthModule,
   ],

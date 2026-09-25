@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -12,6 +13,7 @@ import { UpdateCarDto } from './dto/update-car.dto';
 import { CarsQueryDto } from './dto/cars-query.dto';
 import { CarCategory } from '../car-categories/entities/car-category.entity';
 import { CarStatus } from './enums/car-status.enum';
+import { Reservation } from '../reservations/entities/reservation.entity';
 
 @Injectable()
 export class CarsService {
@@ -21,6 +23,9 @@ export class CarsService {
 
     @InjectRepository(CarCategory)
     private readonly carCategoriesRepository: Repository<CarCategory>,
+
+    @InjectRepository(Reservation)
+    private readonly reservationsRepository: Repository<Reservation>,
   ) {}
 
   async create(createCarDto: CreateCarDto): Promise<Car> {
@@ -129,6 +134,18 @@ export class CarsService {
 
   async remove(id: number): Promise<void> {
     const car = await this.findOne(id);
+
+    // Reservations reference the car, so deleting it would fail and
+    // erase the rental history
+    const reservationsCount = await this.reservationsRepository.count({
+      where: { carId: id },
+    });
+
+    if (reservationsCount > 0) {
+      throw new ConflictException(
+        'Cannot delete car because it has reservations. Set its status to INACTIVE instead.',
+      );
+    }
 
     await this.carsRepository.remove(car);
   }

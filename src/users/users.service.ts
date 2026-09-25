@@ -16,6 +16,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ChangeEmailDto } from './dto/change-email.dto';
 import { EmailService } from '../email/email.service';
+import { normalizePhoneNumber } from '../common/phone/phone-number';
 import {
   checkVerificationCode,
   clearVerificationCode,
@@ -111,6 +112,20 @@ export class UsersService {
     // Update normal fields only if they were provided
     if (updateUserDto.fullName !== undefined) {
       user.fullName = updateUserDto.fullName;
+    }
+
+    if (updateUserDto.phoneNumber !== undefined) {
+      const phoneNumber = normalizePhoneNumber(updateUserDto.phoneNumber);
+
+      const phoneOwner = await this.usersRepository.findOne({
+        where: { phoneNumber },
+      });
+
+      if (phoneOwner && phoneOwner.id !== user.id) {
+        throw new ConflictException('Phone number is already registered');
+      }
+
+      user.phoneNumber = phoneNumber;
     }
 
     const updatedUser = await this.usersRepository.save(user);

@@ -6,6 +6,8 @@ import {
   MinLength,
 } from 'class-validator';
 
+import { IsInternationalPhoneNumber } from '../../common/phone/phone-number';
+
 export class CreateUserDto {
   // User's full name is required.
   @IsString()
@@ -24,4 +26,8 @@ export class CreateUserDto {
   @IsNotEmpty()
   @MinLength(8)
   password: string;
+
+  // WhatsApp number with the country code, e.g. +970591234567
+  @IsInternationalPhoneNumber()
+  phoneNumber: string;
 }

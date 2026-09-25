@@ -24,6 +24,11 @@ export class User {
   @Column({ type: 'varchar', length: 150, nullable: true })
   pendingEmail: string | null;
 
+  // WhatsApp number in international format, e.g. +970591234567.
+  // Null for accounts created before phone numbers were required.
+  @Column({ type: 'varchar', length: 20, nullable: true, unique: true })
+  phoneNumber: string | null;
+
   // Email verification status.
   @Column({ default: false })
   isEmailVerified: boolean;

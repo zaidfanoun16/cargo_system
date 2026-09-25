@@ -150,6 +150,7 @@ describe('AuthService', () => {
         fullName: 'A',
         email: 'a@b.com',
         password: 'password123',
+        phoneNumber: '+970591234567',
       });
 
       const code: string = emailService.sendVerificationCode.mock.calls[0][2];
@@ -169,6 +170,7 @@ describe('AuthService', () => {
         fullName: 'New Name',
         email: 'a@b.com',
         password: 'password123',
+        phoneNumber: '+970591234567',
       });
 
       expect(usersRepository.create).not.toHaveBeenCalled();
@@ -188,6 +190,7 @@ describe('AuthService', () => {
           fullName: 'A',
           email: 'a@b.com',
           password: 'password123',
+          phoneNumber: '+970591234567',
         }),
       ).rejects.toBeInstanceOf(ConflictException);
     });
@@ -253,6 +256,44 @@ describe('AuthService', () => {
         service.resetPassword('a@b.com', '123456', 'newPassword1'),
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(user.passwordHash).toBe('old-hash');
+    });
+  });
+
+  describe('phone number at registration', () => {
+    beforeEach(() => {
+      usersRepository.save.mockImplementation(async (user) => user);
+      usersRepository.create.mockReturnValue({});
+    });
+
+    it('stores the WhatsApp number in international format', async () => {
+      usersRepository.findOne.mockResolvedValue(null);
+
+      await service.register({
+        fullName: 'A',
+        email: 'a@b.com',
+        password: 'password123',
+        phoneNumber: '+970 59-123-4567',
+      });
+
+      expect(usersRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ phoneNumber: '+970591234567' }),
+      );
+    });
+
+    it('rejects a number already used by another account', async () => {
+      usersRepository.findOne
+        .mockResolvedValueOnce(null) // email is free
+        .mockResolvedValueOnce({ id: 9 }); // phone belongs to user 9
+
+      await expect(
+        service.register({
+          fullName: 'A',
+          email: 'a@b.com',
+          password: 'password123',
+          phoneNumber: '+970591234567',
+        }),
+      ).rejects.toThrow('Phone number is already registered');
+      expect(usersRepository.save).not.toHaveBeenCalled();
     });
   });
 });

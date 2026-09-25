@@ -9,6 +9,11 @@ export class CreateCarCategoryDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(100)
+  name: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
 
   // Arabic name and description, e.g. دفع رباعي
   @IsOptional()
@@ -19,9 +24,4 @@ export class CreateCarCategoryDto {
   @IsOptional()
   @IsString()
   descriptionAr?: string;
-  name: string;
-
-  @IsOptional()
-  @IsString()
-  description?: string;
 }

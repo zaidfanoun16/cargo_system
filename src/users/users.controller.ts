@@ -6,7 +6,6 @@ import {
   Param,
   ParseIntPipe,
   Patch,
-  Post,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -14,7 +13,6 @@ import type { Request } from 'express';
 
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -23,12 +21,6 @@ import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) { }
-
-  // Public route: a new user can register without a token
-  @Post()
-  create(@Body() createUserDto: CreateUserDto) {
-    return this.usersService.create(createUserDto);
-  }
 
   // Protected routes: require a valid JWT
   @UseGuards(JwtAuthGuard, RolesGuard)

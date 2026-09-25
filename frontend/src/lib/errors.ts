@@ -12,6 +12,14 @@ const knownErrors: Record<string, string> = {
   'Too many wrong attempts, please request a new code': 'errors.tooManyAttempts',
   'Email is already verified': 'errors.alreadyVerified',
   'Invalid email': 'errors.emailNotFound',
+  'Reservation dates cannot be in the past': 'errors.pastDates',
+  'End date must be after start date': 'errors.endBeforeStart',
+  'A reservation must be at least 2 hours': 'errors.minHours',
+  'Start and end times must be on the hour (minutes and seconds must be 0)': 'errors.onTheHour',
+  'Car is already reserved for the selected dates': 'booking.unavailable.reserved',
+  'Car is currently under maintenance': 'booking.unavailable.maintenance',
+  'Car is inactive and cannot be reserved': 'booking.unavailable.inactive',
+  'Car not found': 'car.notFound',
 }
 
 export function errorKey(error: unknown): string {

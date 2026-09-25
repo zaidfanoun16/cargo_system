@@ -5,6 +5,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  MaxLength,
   Min,
 } from 'class-validator';
 import { CarStatus } from '../enums/car-status.enum';
@@ -29,6 +30,12 @@ export class CarsQueryDto {
   @IsOptional()
   @IsString()
   model?: string;
+
+  // One search box: matches the brand or the model, in English or Arabic
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  search?: string;
 
   @IsOptional()
   @IsEnum(CarStatus)

@@ -7,10 +7,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
+import { ConfigService } from '@nestjs/config';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   In,
   LessThan,
+  LessThanOrEqual,
   MoreThan,
   Repository,
 } from 'typeorm';
@@ -44,6 +47,9 @@ export class ReservationsService {
 
 
     private readonly emailService: EmailService,
+
+
+    private readonly configService: ConfigService,
 
   ) { }
 
@@ -691,6 +697,66 @@ export class ReservationsService {
     );
 
     return (Math.round(pricePerDay * 100) * days) / 100;
+
+  }
+
+
+
+  // Every hour, cancel PENDING reservations the admin did not confirm in
+  // time, so they stop blocking the car. A reservation expires when
+  // whichever comes first: PENDING_RESERVATION_TTL_HOURS (default 24)
+  // have passed since it was created, or its start date has arrived.
+  @Cron(CronExpression.EVERY_HOUR)
+  async expirePendingReservations() {
+
+    const ttlHours = Number(
+      this.configService.get<string>('PENDING_RESERVATION_TTL_HOURS') || 24,
+    );
+
+    const now = new Date();
+
+    const createdBefore = new Date(
+      now.getTime() - ttlHours * 60 * 60 * 1000,
+    );
+
+
+    const expiredReservations =
+      await this.reservationsRepository.find({
+
+        // Each object is an OR condition
+        where: [
+          {
+            status: ReservationStatus.PENDING,
+            createdAt: LessThanOrEqual(createdBefore),
+          },
+          {
+            status: ReservationStatus.PENDING,
+            startDate: LessThanOrEqual(now),
+          },
+        ],
+
+      });
+
+
+    for (const reservation of expiredReservations) {
+
+      reservation.status = ReservationStatus.CANCELLED;
+
+      await this.reservationsRepository.save(reservation);
+
+      await this.notifyStatusChange(reservation.id);
+
+    }
+
+
+    if (expiredReservations.length > 0) {
+      this.logger.log(
+        `Cancelled ${expiredReservations.length} unconfirmed reservation(s)`,
+      );
+    }
+
+
+    return expiredReservations.length;
 
   }
 

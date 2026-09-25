@@ -32,9 +32,33 @@ export class Car {
   @Column()
   year: number;
 
-  // Rental price per day
-  @Column({ type: 'decimal', precision: 10, scale: 2 })
+  // Rental price per day.
+  // PostgreSQL returns decimals as strings, so convert them to numbers.
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => Number(value),
+    },
+  })
   pricePerDay: number;
+
+  // Rental price per hour, for reservations shorter than a day or the
+  // hours left over after full days. Null: the car is rented by the day.
+  // PostgreSQL returns decimals as strings, so convert them to numbers.
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+    transformer: {
+      to: (value: number | null) => value,
+      from: (value: string | null) => (value === null ? null : Number(value)),
+    },
+  })
+  pricePerHour: number | null;
 
   @Column({ length: 100 })
   color: string;

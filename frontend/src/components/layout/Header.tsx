@@ -1,8 +1,9 @@
-import { Menu, X } from 'lucide-react'
+import { LogOut, Menu, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 
+import { useAuth } from '../../hooks/useAuth'
 import { Container } from '../ui/Container'
 import { Logo } from './Logo'
 import { LanguageButton, ThemeButton } from './SettingsButtons'
@@ -33,11 +34,20 @@ function useScrolled(offset = 40) {
   return scrolled
 }
 
+// First letter of the name, shown in the round avatar
+function initial(name: string) {
+  return name.trim().charAt(0).toUpperCase()
+}
+
+const loginLinkClass =
+  'rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-fg transition-colors hover:bg-primary-hover group-data-[hero=true]/header:bg-white group-data-[hero=true]/header:text-neutral-900'
+
 export function Header() {
   const { t } = useTranslation()
   const [menuOpen, setMenuOpen] = useState(false)
   const { pathname } = useLocation()
   const scrolled = useScrolled()
+  const { user, logout } = useAuth()
 
   // See-through over the home page photo until the page scrolls
   const overHero = pathname === '/' && !scrolled && !menuOpen
@@ -65,12 +75,35 @@ export function Header() {
         <div className="hidden items-center gap-1 md:flex">
           <LanguageButton />
           <ThemeButton />
-          <Link
-            to="/login"
-            className="ms-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-fg transition-colors hover:bg-primary-hover group-data-[hero=true]/header:bg-white group-data-[hero=true]/header:text-neutral-900"
-          >
-            {t('nav.login')}
-          </Link>
+          {user ? (
+            <div className="ms-2 flex items-center gap-1">
+              <Link
+                to="/account"
+                className="flex items-center gap-2 rounded-xl py-1.5 ps-1.5 pe-3 text-sm font-semibold transition-colors hover:bg-surface-muted group-data-[hero=true]/header:hover:bg-white/10"
+              >
+                <span
+                  className="grid size-8 place-items-center rounded-full bg-primary text-sm font-bold text-primary-fg group-data-[hero=true]/header:bg-white group-data-[hero=true]/header:text-neutral-900"
+                  aria-hidden
+                >
+                  {initial(user.fullName)}
+                </span>
+                <span className="max-w-32 truncate">{user.fullName}</span>
+              </Link>
+              <button
+                type="button"
+                onClick={logout}
+                className="grid size-10 place-items-center rounded-xl text-muted transition-colors hover:bg-surface-muted hover:text-text group-data-[hero=true]/header:text-white/75 group-data-[hero=true]/header:hover:bg-white/10 group-data-[hero=true]/header:hover:text-white"
+                aria-label={t('nav.logout')}
+                title={t('nav.logout')}
+              >
+                <LogOut className="size-5 rtl:-scale-x-100" aria-hidden />
+              </button>
+            </div>
+          ) : (
+            <Link to="/login" className={`ms-2 ${loginLinkClass}`}>
+              {t('nav.login')}
+            </Link>
+          )}
         </div>
 
         {/* Mobile: theme stays one tap away, the rest is in the menu */}
@@ -97,15 +130,38 @@ export function Header() {
                 {t(link.key)}
               </NavLink>
             ))}
+            {user && (
+              <NavLink to="/account" className={navLinkClass} onClick={closeMenu}>
+                <span className="flex items-center gap-2">
+                  <span
+                    className="grid size-7 place-items-center rounded-full bg-primary text-xs font-bold text-primary-fg"
+                    aria-hidden
+                  >
+                    {initial(user.fullName)}
+                  </span>
+                  <span className="truncate">{user.fullName}</span>
+                </span>
+              </NavLink>
+            )}
             <div className="mt-2 flex items-center justify-between border-t border-border pt-3">
               <LanguageButton />
-              <Link
-                to="/login"
-                className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-fg"
-                onClick={closeMenu}
-              >
-                {t('nav.login')}
-              </Link>
+              {user ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    logout()
+                    closeMenu()
+                  }}
+                  className="inline-flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-muted hover:bg-surface-muted hover:text-text"
+                >
+                  <LogOut className="size-5 rtl:-scale-x-100" aria-hidden />
+                  {t('nav.logout')}
+                </button>
+              ) : (
+                <Link to="/login" className={loginLinkClass} onClick={closeMenu}>
+                  {t('nav.login')}
+                </Link>
+              )}
             </div>
           </Container>
         </div>

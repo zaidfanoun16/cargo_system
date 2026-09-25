@@ -129,7 +129,9 @@ export class StatsService {
     const rows: {
       id: number;
       brand: string;
+      brandAr: string | null;
       model: string;
+      modelAr: string | null;
       reservations: string;
       revenue: string;
     }[] = await this.dataSource.query(
@@ -137,7 +139,9 @@ export class StatsService {
         SELECT
           c."id",
           c."brand",
+          c."brandAr",
           c."model",
+          c."modelAr",
           COUNT(r."id") AS "reservations",
           SUM(r."totalPrice") AS "revenue"
         FROM "reservations" r
@@ -153,6 +157,10 @@ export class StatsService {
     return rows.map((row) => ({
       id: row.id,
       car: `${row.brand} ${row.model}`,
+      brand: row.brand,
+      brandAr: row.brandAr,
+      model: row.model,
+      modelAr: row.modelAr,
       reservations: Number(row.reservations),
       revenue: Number(row.revenue),
     }));

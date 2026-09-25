@@ -30,6 +30,15 @@ const ResetPasswordPage = lazy(() =>
   import('./pages/auth/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage })),
 )
 
+// Admin pages download only for admins who open them
+const AdminLayout = lazy(() => import('./pages/admin/AdminLayout').then((m) => ({ default: m.AdminLayout })))
+const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage })))
+const AdminBookingsPage = lazy(() => import('./pages/admin/AdminBookingsPage').then((m) => ({ default: m.AdminBookingsPage })))
+const AdminCarsPage = lazy(() => import('./pages/admin/AdminCarsPage').then((m) => ({ default: m.AdminCarsPage })))
+const CarFormPage = lazy(() => import('./pages/admin/CarFormPage').then((m) => ({ default: m.CarFormPage })))
+const AdminCategoriesPage = lazy(() => import('./pages/admin/AdminCategoriesPage').then((m) => ({ default: m.AdminCategoriesPage })))
+const AdminUsersPage = lazy(() => import('./pages/admin/AdminUsersPage').then((m) => ({ default: m.AdminUsersPage })))
+
 export default function App() {
   return (
     // Respects the device setting for reduced motion
@@ -71,6 +80,22 @@ export default function App() {
                     </RequireAuth>
                   }
                 />
+                <Route
+                  path="admin"
+                  element={
+                    <RequireAuth admin>
+                      <AdminLayout />
+                    </RequireAuth>
+                  }
+                >
+                  <Route index element={<AdminDashboardPage />} />
+                  <Route path="bookings" element={<AdminBookingsPage />} />
+                  <Route path="cars" element={<AdminCarsPage />} />
+                  <Route path="cars/new" element={<CarFormPage />} />
+                  <Route path="cars/:id" element={<CarFormPage />} />
+                  <Route path="categories" element={<AdminCategoriesPage />} />
+                  <Route path="users" element={<AdminUsersPage />} />
+                </Route>
                 <Route path="*" element={<NotFoundPage />} />
               </Route>
             </Routes>

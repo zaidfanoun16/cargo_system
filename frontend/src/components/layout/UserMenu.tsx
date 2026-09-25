@@ -1,4 +1,4 @@
-import { CalendarDays, ChevronDown, Heart, LogOut, UserRound } from 'lucide-react'
+import { CalendarDays, ChevronDown, Heart, LayoutDashboard, LogOut, UserRound } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { type KeyboardEvent, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -122,6 +122,12 @@ export function UserMenu({ user, onLogout }: Props) {
               </div>
             </div>
             <div className="border-t border-border pt-2">
+              {user.role === 'ADMIN' && (
+                <Link to="/admin" role="menuitem" className={itemClass} onClick={() => setOpen(false)}>
+                  <LayoutDashboard className="size-5 text-muted" aria-hidden />
+                  {t('nav.admin')}
+                </Link>
+              )}
               {items.map(({ to, key, icon: Icon }) => (
                 <Link key={to} to={to} role="menuitem" className={itemClass} onClick={() => setOpen(false)}>
                   <Icon className="size-5 text-muted" aria-hidden />

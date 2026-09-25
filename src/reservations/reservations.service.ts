@@ -471,13 +471,16 @@ export class ReservationsService {
           id: true,
           fullName: true,
           email: true,
+          phoneNumber: true,
           role: true,
         },
 
         car: {
           id: true,
           brand: true,
+          brandAr: true,
           model: true,
+          modelAr: true,
           licensePlate: true,
           year: true,
           pricePerDay: true,
@@ -486,6 +489,11 @@ export class ReservationsService {
           createdAt: true,
           updatedAt: true,
         },
+      },
+
+      // Newest first, so new requests are at the top
+      order: {
+        createdAt: 'DESC',
       },
 
     });

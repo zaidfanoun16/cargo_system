@@ -175,10 +175,18 @@ export class UsersController {
   updateRole(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateUserRoleDto: UpdateUserRoleDto,
+    @Req() request: Request,
   ) {
+    const currentUser = request.user as {
+      userId: number;
+      email: string;
+      role: string;
+    };
+
     return this.usersService.updateRole(
       id,
       updateUserRoleDto,
+      currentUser.userId,
     );
   }
 }

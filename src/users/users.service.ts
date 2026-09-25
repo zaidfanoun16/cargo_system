@@ -309,7 +309,14 @@ export class UsersService {
   async updateRole(
     id: number,
     updateUserRoleDto: { role: 'USER' | 'ADMIN' },
+    currentUserId: number,
   ) {
+    // An admin removing their own role could leave nobody able to manage
+    // the site, so another admin has to do it
+    if (id === currentUserId) {
+      throw new ForbiddenException('You cannot change your own role');
+    }
+
     const user = await this.usersRepository.findOne({
       where: { id },
     });

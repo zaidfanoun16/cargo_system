@@ -1,7 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { User } from './entities/user.entity';
 import { Reservation } from '../reservations/entities/reservation.entity';
@@ -71,6 +75,24 @@ describe('UsersService', () => {
 
     await expect(service.findAll()).resolves.toEqual([expected]);
     await expect(service.findOne(1)).resolves.toEqual(expected);
+  });
+
+  describe('updateRole', () => {
+    it('refuses to change the role of the admin making the request', async () => {
+      await expect(
+        service.updateRole(1, { role: 'USER' }, 1),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(usersRepository.save).not.toHaveBeenCalled();
+    });
+
+    it("changes another user's role", async () => {
+      usersRepository.findOne.mockResolvedValue({ id: 2, role: 'USER' });
+      usersRepository.save.mockImplementation(async (user) => user);
+
+      await expect(
+        service.updateRole(2, { role: 'ADMIN' }, 1),
+      ).resolves.toMatchObject({ id: 2, role: 'ADMIN' });
+    });
   });
 
   describe('remove', () => {

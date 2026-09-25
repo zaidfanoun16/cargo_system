@@ -13,6 +13,7 @@ import { CarCategoriesModule } from './car-categories/car-categories.module';
 import { CarsModule } from './cars/cars.module';
 import { AuthModule } from './auth/auth.module';
 import { ReservationsModule } from './reservations/reservations.module';
+import { StatsModule } from './stats/stats.module';
 import { EmailModule } from './email/email.module';
 
 @Module({
@@ -61,6 +62,7 @@ import { EmailModule } from './email/email.module';
     CarsModule,
     AuthModule,
     ReservationsModule,
+    StatsModule,
     EmailModule,
   ],
 

@@ -2,14 +2,19 @@ import * as bcrypt from 'bcrypt';
 
 import dataSource from '../data-source';
 import { User } from '../../users/entities/user.entity';
+import { normalizePhoneNumber } from '../../common/phone/phone-number';
 
 // Creates the first ADMIN account, or promotes an existing user to ADMIN.
-// Reads ADMIN_EMAIL, ADMIN_PASSWORD and ADMIN_FULL_NAME from .env.
+// Reads ADMIN_EMAIL, ADMIN_PASSWORD, ADMIN_FULL_NAME and the optional
+// ADMIN_PHONE (WhatsApp number with the country code) from .env.
 // Usage: npm run seed:admin
 async function createAdmin() {
   const email = process.env.ADMIN_EMAIL;
   const password = process.env.ADMIN_PASSWORD;
   const fullName = process.env.ADMIN_FULL_NAME ?? 'Admin';
+  const phoneNumber = process.env.ADMIN_PHONE
+    ? normalizePhoneNumber(process.env.ADMIN_PHONE)
+    : null;
 
   if (!email || !password) {
     throw new Error('ADMIN_EMAIL and ADMIN_PASSWORD must be set in .env');
@@ -32,6 +37,7 @@ async function createAdmin() {
     if (existingUser) {
       existingUser.role = 'ADMIN';
       existingUser.isEmailVerified = true;
+      existingUser.phoneNumber = phoneNumber ?? existingUser.phoneNumber;
       await usersRepository.save(existingUser);
 
       console.log(`User ${email} is now an ADMIN`);
@@ -43,6 +49,7 @@ async function createAdmin() {
       email,
       passwordHash: await bcrypt.hash(password, 10),
       role: 'ADMIN',
+      phoneNumber,
       // Admin is created by the server owner, so no verification email is needed
       isEmailVerified: true,
     });

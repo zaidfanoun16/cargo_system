@@ -13,6 +13,7 @@ import { Repository } from 'typeorm';
 import { User } from '../users/entities/user.entity';
 import { CreateUserDto } from '../users/dto/create-user.dto';
 import { EmailService } from '../email/email.service';
+import { normalizePhoneNumber } from '../common/phone/phone-number';
 import {
   checkVerificationCode,
   clearVerificationCode,
@@ -40,6 +41,18 @@ export class AuthService {
       throw new ConflictException('Email is already registered');
     }
 
+    const phoneNumber = normalizePhoneNumber(createUserDto.phoneNumber);
+
+    // One account per WhatsApp number (the unverified account being
+    // replaced below may already use it)
+    const phoneOwner = await this.usersRepository.findOne({
+      where: { phoneNumber },
+    });
+
+    if (phoneOwner && phoneOwner.id !== existingUser?.id) {
+      throw new ConflictException('Phone number is already registered');
+    }
+
     // Hash the user's password before storing it
     const passwordHash = await bcrypt.hash(createUserDto.password, 10);
 
@@ -50,6 +63,7 @@ export class AuthService {
     user.fullName = createUserDto.fullName;
     user.email = createUserDto.email;
     user.passwordHash = passwordHash;
+    user.phoneNumber = phoneNumber;
 
     const code = setVerificationCode(user, 'register');
 

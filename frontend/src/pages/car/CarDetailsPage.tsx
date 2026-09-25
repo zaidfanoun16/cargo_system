@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 
+import { FavoriteButton } from '../../components/cars/FavoriteButton'
 import { RatingBadge } from '../../components/cars/Rating'
 import { Container } from '../../components/ui/Container'
 import { useFetch } from '../../hooks/useFetch'
@@ -79,7 +80,10 @@ export function CarDetailsPage() {
             </span>
             <RatingBadge rating={current.averageRating} count={current.reviewsCount} />
           </div>
-          <h1 className="mt-3 text-3xl font-extrabold sm:text-4xl">{name}</h1>
+          <div className="mt-3 flex items-start justify-between gap-3">
+            <h1 className="text-3xl font-extrabold sm:text-4xl">{name}</h1>
+            <FavoriteButton carId={current.id} carName={name} variant="plain" className="shrink-0" />
+          </div>
 
           {current.status !== 'AVAILABLE' && (
             <p className="mt-3 inline-block rounded-xl bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-900 dark:bg-amber-950 dark:text-amber-200">

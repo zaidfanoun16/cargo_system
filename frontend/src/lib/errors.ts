@@ -24,6 +24,11 @@ const knownErrors: Record<string, string> = {
   'Only PENDING or CONFIRMED reservations can be cancelled': 'bookings.errors.notCancellable',
   'Only completed reservations can be reviewed': 'reviews.errors.notCompleted',
   'This reservation was already reviewed': 'reviews.errors.already',
+  'Current password is incorrect': 'errors.currentPasswordWrong',
+  'Password is incorrect': 'errors.currentPasswordWrong',
+  'New email must be different from the current email': 'errors.sameEmail',
+  'Email is already in use': 'errors.emailTaken',
+  'No email change was requested': 'errors.noEmailChange',
 }
 
 export function errorKey(error: unknown): string {

@@ -52,6 +52,10 @@ export const authStore = {
   updateAccessToken(accessToken: string) {
     if (session) save({ ...session, accessToken })
   },
+  // After editing the profile (name, phone, email)
+  updateUser(changes: Partial<User>) {
+    if (session) save({ ...session, user: { ...session.user, ...changes } })
+  },
   subscribe(listener: () => void) {
     listeners.add(listener)
     return () => {

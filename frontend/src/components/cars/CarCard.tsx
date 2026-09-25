@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom'
 import { type Car, carName, categoryName, colorName } from '../../lib/cars'
 import { formatNumber, formatPrice } from '../../lib/format'
 import { CarPhoto } from './CarPhoto'
+import { FavoriteButton } from './FavoriteButton'
 import { RatingBadge } from './Rating'
 
 // "search" carries the chosen dates on to the car page
@@ -14,10 +15,9 @@ export function CarCard({ car, search = '' }: { car: Car; search?: string }) {
   const name = carName(car, language)
 
   return (
-    <Link
-      to={`/cars/${car.id}${search}`}
-      className="group flex flex-col overflow-hidden rounded-3xl border border-border bg-surface transition duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary dark:hover:shadow-black/40"
-    >
+    // The name's link stretches over the whole card, so the card is one
+    // big click target while the heart stays a separate button
+    <article className="group relative flex flex-col overflow-hidden rounded-3xl border border-border bg-surface transition duration-300 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-primary hover:-translate-y-1 hover:shadow-xl hover:shadow-black/5 dark:hover:shadow-black/40">
       <div className="relative aspect-[4/3] overflow-hidden">
         <CarPhoto
           url={car.images[0]?.url}
@@ -27,15 +27,20 @@ export function CarCard({ car, search = '' }: { car: Car; search?: string }) {
         <span className="absolute start-3 top-3 rounded-full bg-black/55 px-3 py-1 text-xs font-bold text-white backdrop-blur">
           {categoryName(car.category, language)}
         </span>
+        <FavoriteButton carId={car.id} carName={name} className="absolute end-3 top-3 z-10" />
         <RatingBadge
           rating={car.averageRating}
           count={car.reviewsCount}
-          className="absolute end-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-neutral-900 backdrop-blur"
+          className="absolute bottom-3 end-3 rounded-full bg-white/90 px-2.5 py-1 text-neutral-900 backdrop-blur"
         />
       </div>
 
       <div className="flex flex-1 flex-col gap-3 p-4 sm:p-5">
-        <h3 className="text-lg font-extrabold leading-snug">{name}</h3>
+        <h3 className="text-lg font-extrabold leading-snug">
+          <Link to={`/cars/${car.id}${search}`} className="outline-none after:absolute after:inset-0">
+            {name}
+          </Link>
+        </h3>
 
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted">
           <span className="inline-flex items-center gap-1.5">
@@ -60,7 +65,7 @@ export function CarCard({ car, search = '' }: { car: Car; search?: string }) {
           )}
         </div>
       </div>
-    </Link>
+    </article>
   )
 }
 

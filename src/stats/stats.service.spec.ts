@@ -31,7 +31,7 @@ describe('StatsService', () => {
       }
       if (sql.includes('LIMIT 5')) {
         return [
-          { id: 1, brand: 'Toyota', model: 'Corolla', reservations: '3', revenue: '900.00' },
+          { id: 1, brand: 'Toyota', brandAr: 'تويوتا', model: 'Corolla', modelAr: null, reservations: '3', revenue: '900.00' },
         ];
       }
       if (sql.includes('TO_CHAR')) {
@@ -70,7 +70,16 @@ describe('StatsService', () => {
     expect(stats.revenueByMonth[0].revenue).toBe(0);
 
     expect(stats.topCars).toEqual([
-      { id: 1, car: 'Toyota Corolla', reservations: 3, revenue: 900 },
+      {
+        id: 1,
+        car: 'Toyota Corolla',
+        brand: 'Toyota',
+        brandAr: 'تويوتا',
+        model: 'Corolla',
+        modelAr: null,
+        reservations: 3,
+        revenue: 900,
+      },
     ]);
 
     // 17 booked days out of 3 cars x 30 days

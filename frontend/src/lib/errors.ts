@@ -29,6 +29,16 @@ const knownErrors: Record<string, string> = {
   'New email must be different from the current email': 'errors.sameEmail',
   'Email is already in use': 'errors.emailTaken',
   'No email change was requested': 'errors.noEmailChange',
+  'Cannot delete car because it has reservations. Set its status to INACTIVE instead.': 'admin.errors.carHasBookings',
+  'Cannot delete category because it contains cars.': 'admin.errors.categoryHasCars',
+  'Cannot delete user because they have reservations.': 'admin.errors.userHasBookings',
+  'You cannot change your own role': 'admin.errors.ownRole',
+  'licensePlate already exists': 'admin.errors.plateTaken',
+  'name already exists': 'admin.errors.nameTaken',
+  'nameAr already exists': 'admin.errors.nameArTaken',
+  'Only PENDING reservations can be confirmed': 'admin.errors.notPending',
+  'Only CONFIRMED reservations can be completed': 'admin.errors.notConfirmed',
+  'Reservation cannot be completed before the end date': 'admin.errors.notEnded',
 }
 
 export function errorKey(error: unknown): string {
@@ -39,6 +49,7 @@ export function errorKey(error: unknown): string {
   for (const message of error.messages) {
     if (knownErrors[message]) return knownErrors[message]
     if (message.startsWith('phoneNumber')) return 'errors.invalidPhone'
+    if (message.startsWith('A car can have at most')) return 'admin.images.limitReached'
   }
 
   return 'errors.generic'

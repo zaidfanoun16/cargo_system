@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
 import { CarPhoto } from '../../components/cars/CarPhoto'
+import { StatusBadge } from '../../components/cars/StatusBadge'
 import { FormAlert } from '../../components/form/FormAlert'
 import { Button } from '../../components/ui/Button'
 import { Container } from '../../components/ui/Container'
@@ -11,20 +12,13 @@ import { useConfirm } from '../../hooks/useConfirm'
 import { useFetch } from '../../hooks/useFetch'
 import { useToast } from '../../hooks/useToast'
 import { api } from '../../lib/api'
-import { type Booking, type BookingStatus, carName } from '../../lib/cars'
+import { type Booking, carName } from '../../lib/cars'
 import { formatDate } from '../../lib/dates'
 import { errorKey } from '../../lib/errors'
 import { formatNumber, formatPrice } from '../../lib/format'
 import { ReviewDialog } from './ReviewDialog'
 
 type Tab = 'upcoming' | 'past' | 'cancelled'
-
-const statusStyles: Record<BookingStatus, string> = {
-  PENDING: 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200',
-  CONFIRMED: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300',
-  COMPLETED: 'bg-primary-soft text-text',
-  CANCELLED: 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300',
-}
 
 function tabOf(booking: Booking, now: number): Tab {
   if (booking.status === 'CANCELLED') return 'cancelled'
@@ -175,9 +169,7 @@ export function MyBookingsPage() {
                           {t('bookings.number', { id: formatNumber(booking.id, language) })}
                         </p>
                       </div>
-                      <span className={`rounded-full px-3 py-1 text-xs font-bold ${statusStyles[booking.status]}`}>
-                        {t(`bookings.status.${booking.status}`)}
-                      </span>
+                      <StatusBadge status={booking.status} />
                     </div>
 
                     <dl className="grid gap-3 text-sm sm:grid-cols-3">

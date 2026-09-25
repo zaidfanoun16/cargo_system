@@ -25,7 +25,9 @@ type Options = {
 async function send(path: string, { method = 'GET', body, auth = false }: Options) {
   const headers: Record<string, string> = {}
 
-  if (body !== undefined) {
+  // Files (FormData) set their own content type with the boundary
+  const isForm = body instanceof FormData
+  if (body !== undefined && !isForm) {
     headers['Content-Type'] = 'application/json'
   }
 
@@ -38,7 +40,7 @@ async function send(path: string, { method = 'GET', body, auth = false }: Option
     return await fetch(`${API_URL}${path}`, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
     })
   } catch {
     // The server is down or the device is offline

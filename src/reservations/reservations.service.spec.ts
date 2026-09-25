@@ -1,5 +1,6 @@
 import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Reservation } from './entities/reservation.entity';
 import { User } from '../users/entities/user.entity';
@@ -12,6 +13,7 @@ describe('ReservationsService', () => {
 
   const reservationsRepository = {
     findOne: jest.fn(),
+    find: jest.fn(),
     create: jest.fn(),
     save: jest.fn(),
   };
@@ -35,6 +37,7 @@ describe('ReservationsService', () => {
         { provide: getRepositoryToken(User), useValue: {} },
         { provide: getRepositoryToken(Car), useValue: carsRepository },
         { provide: EmailService, useValue: emailService },
+        { provide: ConfigService, useValue: { get: () => undefined } },
       ],
     }).compile();
 
@@ -176,6 +179,45 @@ describe('ReservationsService', () => {
       await expect(service.confirm(7)).resolves.toMatchObject({
         status: 'CONFIRMED',
       });
+    });
+  });
+
+  describe('expirePendingReservations', () => {
+    beforeEach(() => {
+      reservationsRepository.save.mockImplementation(async (r) => r);
+      reservationsRepository.findOne.mockResolvedValue(null);
+    });
+
+    it('cancels expired PENDING reservations', async () => {
+      const expired = [
+        { id: 1, status: 'PENDING' },
+        { id: 2, status: 'PENDING' },
+      ];
+      reservationsRepository.find.mockResolvedValue(expired);
+
+      await expect(service.expirePendingReservations()).resolves.toBe(2);
+
+      expect(expired.every((r) => r.status === 'CANCELLED')).toBe(true);
+      expect(reservationsRepository.save).toHaveBeenCalledTimes(2);
+    });
+
+    it('looks for reservations older than 24 hours or already started', async () => {
+      reservationsRepository.find.mockResolvedValue([]);
+      const before = Date.now();
+
+      await service.expirePendingReservations();
+
+      const [byAge, byStart] =
+        reservationsRepository.find.mock.calls[0][0].where;
+      const createdBefore: Date = byAge.createdAt.value;
+      const startedBy: Date = byStart.startDate.value;
+
+      expect(byAge.status).toBe('PENDING');
+      expect(byStart.status).toBe('PENDING');
+      expect(before - createdBefore.getTime()).toBeGreaterThanOrEqual(
+        24 * 60 * 60 * 1000,
+      );
+      expect(startedBy.getTime()).toBeGreaterThanOrEqual(before);
     });
   });
 });

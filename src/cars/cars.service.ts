@@ -189,6 +189,67 @@ export class CarsService {
     return car;
   }
 
+  // Calendar of a car for one month: the reserved periods and every day
+  // that is at least partly reserved. Who reserved is never shown.
+  async getAvailability(id: number, month?: string) {
+    const car = await this.findOne(id);
+
+    // Work in UTC so a day is the same for every server time zone
+    const now = new Date();
+    const [year, monthIndex] = month
+      ? [Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1]
+      : [now.getUTCFullYear(), now.getUTCMonth()];
+
+    const monthStart = new Date(Date.UTC(year, monthIndex, 1));
+    const monthEnd = new Date(Date.UTC(year, monthIndex + 1, 1));
+
+    // Same rule as creating a reservation: PENDING and CONFIRMED block
+    const reservations = await this.reservationsRepository.find({
+      select: { startDate: true, endDate: true, status: true },
+      where: {
+        carId: id,
+        status: In([
+          ReservationStatus.PENDING,
+          ReservationStatus.CONFIRMED,
+        ]),
+        startDate: LessThan(monthEnd),
+        endDate: MoreThan(monthStart),
+      },
+      order: { startDate: 'ASC' },
+    });
+
+    const dayInMs = 24 * 60 * 60 * 1000;
+    const bookedDates: string[] = [];
+
+    for (
+      let day = monthStart.getTime();
+      day < monthEnd.getTime();
+      day += dayInMs
+    ) {
+      const isBooked = reservations.some(
+        (reservation) =>
+          reservation.startDate.getTime() < day + dayInMs &&
+          reservation.endDate.getTime() > day,
+      );
+
+      if (isBooked) {
+        bookedDates.push(new Date(day).toISOString().slice(0, 10));
+      }
+    }
+
+    return {
+      carId: car.id,
+      carStatus: car.status,
+      month: monthStart.toISOString().slice(0, 7),
+      bookedPeriods: reservations.map((reservation) => ({
+        startDate: reservation.startDate,
+        endDate: reservation.endDate,
+        status: reservation.status,
+      })),
+      bookedDates,
+    };
+  }
+
   async update(
     id: number,
     updateCarDto: UpdateCarDto,

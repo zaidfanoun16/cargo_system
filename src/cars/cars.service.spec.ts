@@ -67,6 +67,53 @@ describe('CarsService', () => {
     });
   });
 
+  describe('getAvailability', () => {
+    beforeEach(() => {
+      carsRepository.findOne.mockResolvedValue({ id: 5, status: 'AVAILABLE' });
+    });
+
+    it('lists every day of the month that is at least partly reserved', async () => {
+      reservationsRepository.find.mockResolvedValue([
+        // Starts in September, ends October 3 at midnight
+        {
+          startDate: new Date('2030-09-28T00:00:00Z'),
+          endDate: new Date('2030-10-03T00:00:00Z'),
+          status: 'CONFIRMED',
+        },
+        // Part of a day still blocks that day
+        {
+          startDate: new Date('2030-10-10T14:00:00Z'),
+          endDate: new Date('2030-10-11T10:00:00Z'),
+          status: 'PENDING',
+        },
+      ]);
+
+      const calendar = await service.getAvailability(5, '2030-10');
+
+      expect(calendar.month).toBe('2030-10');
+      expect(calendar.bookedPeriods).toHaveLength(2);
+      expect(calendar.bookedDates).toEqual([
+        '2030-10-01',
+        '2030-10-02',
+        '2030-10-10',
+        '2030-10-11',
+      ]);
+    });
+
+    it('returns an empty calendar when nothing is reserved', async () => {
+      reservationsRepository.find.mockResolvedValue([]);
+
+      const calendar = await service.getAvailability(5, '2030-02');
+
+      expect(calendar).toMatchObject({
+        carId: 5,
+        month: '2030-02',
+        bookedPeriods: [],
+        bookedDates: [],
+      });
+    });
+  });
+
   describe('findAll by dates', () => {
     beforeEach(() => {
       carsRepository.findAndCount.mockResolvedValue([[], 0]);

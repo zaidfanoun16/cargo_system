@@ -740,7 +740,11 @@ export class ReservationsService {
     const savedReservation =
       await this.reservationsRepository.save(reservation);
 
-    await this.notifyStatusChange(savedReservation.id);
+    // An admin cancelling someone else's booking, or the customer
+    const cancelledBy =
+      role === 'ADMIN' && reservation.userId !== userId ? 'admin' : 'user';
+
+    await this.notifyStatusChange(savedReservation.id, cancelledBy);
 
     return savedReservation;
 
@@ -852,7 +856,7 @@ export class ReservationsService {
     const savedReservation =
       await this.reservationsRepository.save(reservation);
 
-    await this.notifyStatusChange(savedReservation.id);
+    await this.notifyStatusChange(savedReservation.id, 'admin');
 
     return savedReservation;
 
@@ -987,7 +991,7 @@ export class ReservationsService {
 
       await this.reservationsRepository.save(reservation);
 
-      await this.notifyStatusChange(reservation.id);
+      await this.notifyStatusChange(reservation.id, 'system');
 
     }
 
@@ -1008,7 +1012,11 @@ export class ReservationsService {
   // Email the user when their reservation is confirmed, cancelled or
   // completed. A failed email must not undo the status change, so errors
   // are only logged.
-  private async notifyStatusChange(reservationId: number) {
+  // cancelledBy: who cancelled, so the email can say it (see EmailService)
+  private async notifyStatusChange(
+    reservationId: number,
+    cancelledBy?: 'user' | 'admin' | 'system',
+  ) {
 
     try {
 
@@ -1035,16 +1043,23 @@ export class ReservationsService {
       }
 
 
+      // The email is in Arabic, so the Arabic names are used when set
+      const car = reservation.car;
+
       await this.emailService.sendReservationStatus(
         reservation.user.email,
         {
           fullName: reservation.user.fullName,
           reservationId: reservation.id,
           status: reservation.status,
-          car: `${reservation.car.brand} ${reservation.car.model}`,
+          car: `${car.brandAr || car.brand} ${car.modelAr || car.model}`,
+          licensePlate: car.licensePlate,
           startDate: reservation.startDate,
           endDate: reservation.endDate,
-          totalPrice: reservation.totalPrice,
+          basePrice: Number(reservation.basePrice),
+          discountPercent: reservation.discountPercent,
+          totalPrice: Number(reservation.totalPrice),
+          cancelledBy,
         },
       );
 

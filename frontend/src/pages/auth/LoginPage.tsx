@@ -8,6 +8,7 @@ import { FormAlert } from '../../components/form/FormAlert'
 import { PasswordInput } from '../../components/form/PasswordInput'
 import { Button } from '../../components/ui/Button'
 import { useAuth } from '../../hooks/useAuth'
+import { useToast } from '../../hooks/useToast'
 import { errorKey } from '../../lib/errors'
 import { isEmail } from '../../lib/validation'
 import { AuthLayout } from './AuthLayout'
@@ -23,6 +24,7 @@ export type LoginState = {
 export function LoginPage() {
   const { t } = useTranslation()
   const { user, login } = useAuth()
+  const toast = useToast()
   const navigate = useNavigate()
   const state = (useLocation().state ?? {}) as LoginState
 
@@ -48,7 +50,8 @@ export function LoginPage() {
 
     setLoading(true)
     try {
-      await login(email.trim(), password)
+      const signedIn = await login(email.trim(), password)
+      toast.success(t('confirm.welcome', { name: signedIn.fullName.split(' ')[0] }))
       navigate(state.from ?? '/', { replace: true })
     } catch (caught) {
       setError(errorKey(caught))

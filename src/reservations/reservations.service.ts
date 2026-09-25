@@ -24,6 +24,7 @@ import { UpdateReservationStatusDto } from './dto/update-reservation-status.dto'
 
 import { User } from '../users/entities/user.entity';
 import { Car } from '../cars/entities/car.entity';
+import { Review } from '../reviews/entities/review.entity';
 import { EmailService } from '../email/email.service';
 
 
@@ -54,6 +55,10 @@ export class ReservationsService {
 
     @InjectRepository(Car)
     private readonly carsRepository: Repository<Car>,
+
+
+    @InjectRepository(Review)
+    private readonly reviewsRepository: Repository<Review>,
 
 
     private readonly emailService: EmailService,
@@ -309,21 +314,51 @@ export class ReservationsService {
 
 
   // USER: Get his own reservations
+  // Newest first, with each car's photos and category, and whether
+  // the reservation already has a review
   async getMyReservations(
     userId: number,
   ) {
 
-    return this.reservationsRepository.find({
+    const reservations = await this.reservationsRepository.find({
 
       where: {
         userId,
       },
 
       relations: {
-        car: true,
+        car: {
+          category: true,
+          images: true,
+        },
+      },
+
+      order: {
+        startDate: 'DESC',
+        car: { images: { createdAt: 'ASC' } },
       },
 
     });
+
+
+    const reviewed = reservations.length
+      ? await this.reviewsRepository.find({
+          select: { reservationId: true },
+          where: {
+            reservationId: In(reservations.map((reservation) => reservation.id)),
+          },
+        })
+      : [];
+
+    const reviewedIds = new Set(
+      reviewed.map((review) => review.reservationId),
+    );
+
+
+    return reservations.map((reservation) => ({
+      ...reservation,
+      reviewed: reviewedIds.has(reservation.id),
+    }));
 
   }
 

@@ -87,3 +87,18 @@ export function categoryDescription(category: Category, language: string) {
 export function colorName(car: Pick<Car, 'color' | 'colorAr'>, language: string) {
   return isArabic(language) ? car.colorAr || car.color : car.color
 }
+
+export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED'
+
+export type Booking = {
+  id: number
+  startDate: string
+  endDate: string
+  status: BookingStatus
+  basePrice: number
+  discountPercent: number
+  totalPrice: number
+  createdAt: string
+  reviewed: boolean
+  car: Omit<Car, 'averageRating' | 'reviewsCount'>
+}

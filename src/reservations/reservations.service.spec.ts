@@ -5,6 +5,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { Reservation } from './entities/reservation.entity';
 import { User } from '../users/entities/user.entity';
 import { Car } from '../cars/entities/car.entity';
+import { Review } from '../reviews/entities/review.entity';
 import { ReservationsService } from './reservations.service';
 import { EmailService } from '../email/email.service';
 
@@ -18,6 +19,7 @@ describe('ReservationsService', () => {
     save: jest.fn(),
   };
   const carsRepository = { findOne: jest.fn() };
+  const reviewsRepository = { find: jest.fn() };
   const emailService = { sendReservationStatus: jest.fn() };
 
   const currentUser = { userId: 1, email: 'a@b.com', role: 'USER' };
@@ -36,6 +38,7 @@ describe('ReservationsService', () => {
         { provide: getRepositoryToken(Reservation), useValue: reservationsRepository },
         { provide: getRepositoryToken(User), useValue: {} },
         { provide: getRepositoryToken(Car), useValue: carsRepository },
+        { provide: getRepositoryToken(Review), useValue: reviewsRepository },
         { provide: EmailService, useValue: emailService },
         { provide: ConfigService, useValue: { get: () => undefined } },
       ],
@@ -236,6 +239,35 @@ describe('ReservationsService', () => {
         discountPercent: 20,
         totalPrice: 799.92,
       });
+    });
+  });
+
+  describe('getMyReservations', () => {
+    it('marks the reservations that already have a review', async () => {
+      reservationsRepository.find.mockResolvedValue([
+        { id: 7, status: 'COMPLETED' },
+        { id: 8, status: 'COMPLETED' },
+        { id: 9, status: 'PENDING' },
+      ]);
+      reviewsRepository.find.mockResolvedValue([{ reservationId: 8 }]);
+
+      const reservations = await service.getMyReservations(1);
+
+      expect(reservations.map((r) => [r.id, r.reviewed])).toEqual([
+        [7, false],
+        [8, true],
+        [9, false],
+      ]);
+      expect(reservationsRepository.find).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { userId: 1 } }),
+      );
+    });
+
+    it('skips the review lookup when there are no reservations', async () => {
+      reservationsRepository.find.mockResolvedValue([]);
+
+      await expect(service.getMyReservations(1)).resolves.toEqual([]);
+      expect(reviewsRepository.find).not.toHaveBeenCalled();
     });
   });
 

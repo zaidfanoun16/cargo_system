@@ -231,6 +231,12 @@ describe('UsersService', () => {
   });
 
   describe('deleteUnverifiedAccounts', () => {
+    // Freeze the clock so the cutoff can be checked exactly
+    const now = new Date('2030-01-15T12:00:00Z');
+
+    beforeEach(() => jest.useFakeTimers({ now }));
+    afterEach(() => jest.useRealTimers());
+
     it('deletes unverified accounts untouched for 7 days', async () => {
       const query = {
         delete: jest.fn().mockReturnThis(),
@@ -240,15 +246,12 @@ describe('UsersService', () => {
         execute: jest.fn().mockResolvedValue({ affected: 3 }),
       };
       usersRepository.createQueryBuilder.mockReturnValue(query);
-      const before = Date.now();
 
       await expect(service.deleteUnverifiedAccounts()).resolves.toBe(3);
 
       expect(query.where).toHaveBeenCalledWith('"isEmailVerified" = false');
       const cutoff: Date = query.andWhere.mock.calls[0][1].cutoff;
-      expect(before - cutoff.getTime()).toBeGreaterThanOrEqual(
-        7 * 24 * 60 * 60 * 1000,
-      );
+      expect(cutoff).toEqual(new Date('2030-01-08T12:00:00Z'));
     });
   });
 });

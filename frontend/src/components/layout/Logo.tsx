@@ -39,7 +39,7 @@ export function Logo({ className = '' }: { className?: string }) {
     <Link to="/" dir="ltr" className={`flex items-center gap-2 ${className}`} aria-label="CarGo">
       <LogoMark className="size-9" />
       <span className="text-xl font-extrabold tracking-tight">
-        Car<span className="font-medium text-muted">Go</span>
+        Car<span className="font-medium text-muted group-data-[hero=true]/header:text-white/70">Go</span>
       </span>
     </Link>
   )

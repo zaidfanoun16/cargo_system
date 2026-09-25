@@ -55,6 +55,13 @@
     color-scheme: dark;
   }
 
+  /* Smooth scrolling for in-page links, unless the device asks for less motion */
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
+  }
+
   body {
     @apply min-h-dvh bg-bg font-sans text-text antialiased transition-colors;
   }

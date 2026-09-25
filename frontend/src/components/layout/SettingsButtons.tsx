@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useTheme } from '../../hooks/useTheme'
 
 const iconButton =
-  'inline-flex h-10 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-semibold text-text transition-colors hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-primary'
+  'inline-flex h-10 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-semibold text-text transition-colors hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-primary group-data-[hero=true]/header:text-white group-data-[hero=true]/header:hover:bg-white/10'
 
 export function LanguageButton() {
   const { t, i18n } = useTranslation()

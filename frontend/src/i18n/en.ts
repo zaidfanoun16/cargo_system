@@ -19,9 +19,43 @@ const en: typeof ar = {
     lightMode: 'Light mode',
   },
   home: {
-    title: 'Rent your car with ease',
+    eyebrow: 'Premium car rental',
+    title: 'Drive the car of your dreams',
     subtitle:
       'Pick the right car for you, by the day or by the hour, and book it in minutes.',
+    scroll: 'Discover more',
+    highlights: {
+      discount: 'Discount of up to',
+      minimum: 'hours minimum booking',
+      online: 'Book online any time',
+    },
+    categoriesTitle: 'Choose your style',
+    categoriesSubtitle: 'From sports cars to SUVs, there is a car for every trip.',
+    categories: {
+      sports: 'Sports',
+      super: 'Supercar',
+      suv: 'SUV',
+      luxury: 'Luxury',
+    },
+    explore: 'Explore',
+    stepsTitle: 'Book in three steps',
+    steps: {
+      search: {
+        title: 'Pick your dates',
+        text: 'Choose when you pick the car up and when you return it.',
+      },
+      choose: {
+        title: 'Choose your car',
+        text: 'We only show the cars that are free for that period.',
+      },
+      drive: {
+        title: 'Book and drive',
+        text: 'Confirm the booking, and get an email as soon as it is approved.',
+      },
+    },
+    ctaTitle: 'Ready for your next trip?',
+    ctaText: 'Premium cars with clear prices, and automatic discounts on long rentals.',
+    ctaButton: 'Browse cars',
     searchTitle: 'Find an available car',
     from: 'From',
     to: 'To',

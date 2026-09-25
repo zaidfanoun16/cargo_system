@@ -1,12 +1,14 @@
 import type { ButtonHTMLAttributes } from 'react'
 
-type Variant = 'primary' | 'secondary' | 'ghost'
+type Variant = 'primary' | 'secondary' | 'ghost' | 'light'
 
 const variants: Record<Variant, string> = {
   primary: 'bg-primary text-primary-fg hover:bg-primary-hover',
   secondary:
     'border border-border bg-surface text-text hover:bg-surface-muted',
   ghost: 'text-text hover:bg-surface-muted',
+  // For use over photos, in both themes
+  light: 'bg-white text-neutral-900 hover:bg-white/85',
 }
 
 type Props = ButtonHTMLAttributes<HTMLButtonElement> & {

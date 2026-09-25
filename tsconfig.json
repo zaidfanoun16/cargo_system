@@ -11,7 +11,11 @@
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
     "target": "ES2023",
-    "types": ["node", "jest", "multer"],
+    "types": [
+      "node",
+      "jest",
+      "multer"
+    ],
     "sourceMap": true,
     "outDir": "./dist",
     "rootDir": "./",
@@ -19,5 +23,10 @@
     "skipLibCheck": true,
     "strict": true,
     "strictPropertyInitialization": false
-  }
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    "frontend"
+  ]
 }

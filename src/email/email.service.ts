@@ -9,6 +9,10 @@ import { Resend } from 'resend';
 export class EmailService {
   private readonly resend: Resend;
 
+  // Sender address. Resend's test sender works without a verified domain,
+  // but can only deliver to the Resend account owner's email.
+  private readonly from: string;
+
   constructor(private readonly configService: ConfigService) {
     const apiKey = this.configService.get<string>('RESEND_API_KEY');
 
@@ -17,6 +21,9 @@ export class EmailService {
     }
 
     this.resend = new Resend(apiKey);
+
+    this.from =
+      this.configService.get<string>('EMAIL_FROM') ?? 'onboarding@resend.dev';
   }
 
   async sendEmail(
@@ -25,7 +32,7 @@ export class EmailService {
     html: string,
   ) {
     const { data, error } = await this.resend.emails.send({
-      from: 'onboarding@resend.dev',
+      from: this.from,
       to: [to],
       subject,
       html,

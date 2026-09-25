@@ -52,14 +52,14 @@ export class EmailService {
     to: string,
     fullName: string,
     code: string,
-    message = 'Enter this code to verify your email:',
+    message = 'أدخل هذا الرمز لتفعيل بريدك الإلكتروني:',
   ) {
     await this.sendEmail(
       to,
-      'Your Cargo System verification code',
+      'رمز التحقق من Cargo System',
       `
-        <div style="
-          font-family: Arial, sans-serif;
+        <div dir="rtl" style="
+          font-family: Tahoma, Arial, sans-serif;
           max-width: 500px;
           margin: 0 auto;
           padding: 30px;
@@ -72,14 +72,14 @@ export class EmailService {
           </h2>
 
           <p style="font-size: 16px;">
-            Hi ${escapeHtml(fullName)},
+            مرحباً ${escapeHtml(fullName)}،
           </p>
 
           <p style="font-size: 15px; line-height: 1.6;">
             ${message}
           </p>
 
-          <p style="
+          <p dir="ltr" style="
             margin: 20px 0;
             font-size: 32px;
             font-weight: bold;
@@ -90,7 +90,7 @@ export class EmailService {
           </p>
 
           <p style="font-size: 13px; color: #777;">
-            This code expires in 10 minutes.
+            تنتهي صلاحية هذا الرمز خلال 10 دقائق.
           </p>
 
         </div>
@@ -113,19 +113,22 @@ export class EmailService {
   ) {
     const statusText = {
       CONFIRMED: {
-        title: 'Your reservation is confirmed ✅',
-        message: 'Your car is booked. See you on the start date!',
+        title: 'تم تأكيد حجزك ✅',
+        message: 'سيارتك محجوزة، نراك في موعد الاستلام!',
         color: '#16a34a',
+        subject: 'تم التأكيد',
       },
       CANCELLED: {
-        title: 'Your reservation was cancelled',
-        message: 'This reservation is no longer active.',
+        title: 'تم إلغاء حجزك',
+        message: 'هذا الحجز لم يعد فعّالاً.',
         color: '#dc2626',
+        subject: 'تم الإلغاء',
       },
       COMPLETED: {
-        title: 'Thanks for renting with us 🚗',
-        message: 'Your reservation is complete. We hope you enjoyed the ride!',
+        title: 'شكراً لاستئجارك معنا 🚗',
+        message: 'اكتمل حجزك، نتمنى أن تكون رحلتك ممتعة!',
         color: '#2563eb',
+        subject: 'اكتمل',
       },
     }[details.status];
 
@@ -134,13 +137,14 @@ export class EmailService {
 
     await this.sendEmail(
       to,
-      `Reservation #${details.reservationId}: ${details.status.toLowerCase()}`,
+      `حجز رقم ${details.reservationId}: ${statusText.subject}`,
       `
-        <div style="
-          font-family: Arial, sans-serif;
+        <div dir="rtl" style="
+          font-family: Tahoma, Arial, sans-serif;
           max-width: 500px;
           margin: 0 auto;
           padding: 30px;
+          text-align: right;
           color: #333;
         ">
 
@@ -149,7 +153,7 @@ export class EmailService {
           </h2>
 
           <p style="font-size: 16px;">
-            Hi ${escapeHtml(details.fullName)},
+            مرحباً ${escapeHtml(details.fullName)}،
           </p>
 
           <p style="font-size: 15px; line-height: 1.6;">
@@ -163,24 +167,24 @@ export class EmailService {
             font-size: 15px;
           ">
             <tr>
-              <td style="padding: 8px 0; color: #777;">Reservation</td>
-              <td style="padding: 8px 0; text-align: right;">#${details.reservationId}</td>
+              <td style="padding: 8px 0; color: #777;">رقم الحجز</td>
+              <td style="padding: 8px 0; text-align: left;">#${details.reservationId}</td>
             </tr>
             <tr>
-              <td style="padding: 8px 0; color: #777;">Car</td>
-              <td style="padding: 8px 0; text-align: right;">${escapeHtml(details.car)}</td>
+              <td style="padding: 8px 0; color: #777;">السيارة</td>
+              <td style="padding: 8px 0; text-align: left;">${escapeHtml(details.car)}</td>
             </tr>
             <tr>
-              <td style="padding: 8px 0; color: #777;">From</td>
-              <td style="padding: 8px 0; text-align: right;">${formatDate(details.startDate)}</td>
+              <td style="padding: 8px 0; color: #777;">من</td>
+              <td style="padding: 8px 0; text-align: left;">${formatDate(details.startDate)}</td>
             </tr>
             <tr>
-              <td style="padding: 8px 0; color: #777;">To</td>
-              <td style="padding: 8px 0; text-align: right;">${formatDate(details.endDate)}</td>
+              <td style="padding: 8px 0; color: #777;">إلى</td>
+              <td style="padding: 8px 0; text-align: left;">${formatDate(details.endDate)}</td>
             </tr>
             <tr>
-              <td style="padding: 8px 0; color: #777;">Total price</td>
-              <td style="padding: 8px 0; text-align: right; font-weight: bold;">${details.totalPrice.toFixed(2)}</td>
+              <td style="padding: 8px 0; color: #777;">السعر الكلي</td>
+              <td style="padding: 8px 0; text-align: left; font-weight: bold;">${details.totalPrice.toFixed(2)}</td>
             </tr>
           </table>
 

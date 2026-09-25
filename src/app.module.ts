@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -51,6 +52,9 @@ import { EmailModule } from './email/email.module';
         limit: 100,
       },
     ]),
+
+    // Runs scheduled jobs such as expiring unconfirmed reservations
+    ScheduleModule.forRoot(),
 
     // Application feature modules
     UsersModule,

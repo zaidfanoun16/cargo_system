@@ -261,7 +261,7 @@ export class AuthService {
       user.email,
       user.fullName,
       code,
-      'Enter this code to reset your password:',
+      'أدخل هذا الرمز لإعادة تعيين كلمة المرور:',
     );
 
     return response;

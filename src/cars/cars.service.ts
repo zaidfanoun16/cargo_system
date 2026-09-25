@@ -6,7 +6,14 @@ import {
 } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, Repository } from 'typeorm';
+import {
+  ILike,
+  In,
+  LessThan,
+  MoreThan,
+  Not,
+  Repository,
+} from 'typeorm';
 
 import { Car } from './entities/car.entity';
 import { CarImage } from './entities/car-image.entity';
@@ -16,6 +23,8 @@ import { CarsQueryDto } from './dto/cars-query.dto';
 import { CarCategory } from '../car-categories/entities/car-category.entity';
 import { CarStatus } from './enums/car-status.enum';
 import { Reservation } from '../reservations/entities/reservation.entity';
+import { ReservationStatus } from '../reservations/enums/reservation-status.enum';
+import { ReviewsService } from '../reviews/reviews.service';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 
 // Most photos one car can have
@@ -37,6 +46,8 @@ export class CarsService {
     private readonly carImagesRepository: Repository<CarImage>,
 
     private readonly cloudinaryService: CloudinaryService,
+
+    private readonly reviewsService: ReviewsService,
   ) {}
 
   async create(createCarDto: CreateCarDto): Promise<Car> {
@@ -69,13 +80,26 @@ export class CarsService {
       model,
       status,
       categoryId,
+      startDate,
+      endDate,
     } = query;
+
+    const reservedCarIds = await this.findReservedCarIds(
+      startDate,
+      endDate,
+      status,
+    );
 
     const [cars, total] = await this.carsRepository.findAndCount({
       where: {
         ...(brand && { brand: ILike(`%${brand}%`) }),
         ...(model && { model: ILike(`%${model}%`) }),
         ...(status && { status }),
+        // Searching by dates only returns cars that can be reserved
+        ...(reservedCarIds && {
+          status: CarStatus.AVAILABLE,
+          id: Not(In(reservedCarIds)),
+        }),
         ...(categoryId && {
           category: {
             id: categoryId,
@@ -94,13 +118,72 @@ export class CarsService {
       },
     });
 
+    const ratings = await this.reviewsService.getRatings(
+      cars.map((car) => car.id),
+    );
+
     return {
-      data: cars,
+      data: cars.map((car) => ({ ...car, ...ratings.get(car.id) })),
       total,
       page,
       limit,
       totalPages: Math.ceil(total / limit),
     };
+  }
+
+  // A car with its average rating and number of reviews
+  async findOneWithRating(id: number) {
+    const car = await this.findOne(id);
+
+    const ratings = await this.reviewsService.getRatings([id]);
+
+    return { ...car, ...ratings.get(id) };
+  }
+
+  // IDs of cars with an active reservation overlapping the requested
+  // period, or undefined when no period was requested
+  private async findReservedCarIds(
+    startDate: string | undefined,
+    endDate: string | undefined,
+    status: CarStatus | undefined,
+  ): Promise<number[] | undefined> {
+    if (!startDate && !endDate) {
+      return undefined;
+    }
+
+    if (!startDate || !endDate) {
+      throw new BadRequestException(
+        'startDate and endDate must be sent together',
+      );
+    }
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    if (start >= end) {
+      throw new BadRequestException('endDate must be after startDate');
+    }
+
+    if (status && status !== CarStatus.AVAILABLE) {
+      throw new BadRequestException(
+        'Only AVAILABLE cars can be searched by dates',
+      );
+    }
+
+    // Same overlap rule as creating a reservation
+    const reservations = await this.reservationsRepository.find({
+      select: { carId: true },
+      where: {
+        status: In([
+          ReservationStatus.PENDING,
+          ReservationStatus.CONFIRMED,
+        ]),
+        startDate: LessThan(end),
+        endDate: MoreThan(start),
+      },
+    });
+
+    return [...new Set(reservations.map((r) => r.carId))];
   }
 
   async findOne(id: number): Promise<Car> {
@@ -120,6 +203,67 @@ export class CarsService {
     }
 
     return car;
+  }
+
+  // Calendar of a car for one month: the reserved periods and every day
+  // that is at least partly reserved. Who reserved is never shown.
+  async getAvailability(id: number, month?: string) {
+    const car = await this.findOne(id);
+
+    // Work in UTC so a day is the same for every server time zone
+    const now = new Date();
+    const [year, monthIndex] = month
+      ? [Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1]
+      : [now.getUTCFullYear(), now.getUTCMonth()];
+
+    const monthStart = new Date(Date.UTC(year, monthIndex, 1));
+    const monthEnd = new Date(Date.UTC(year, monthIndex + 1, 1));
+
+    // Same rule as creating a reservation: PENDING and CONFIRMED block
+    const reservations = await this.reservationsRepository.find({
+      select: { startDate: true, endDate: true, status: true },
+      where: {
+        carId: id,
+        status: In([
+          ReservationStatus.PENDING,
+          ReservationStatus.CONFIRMED,
+        ]),
+        startDate: LessThan(monthEnd),
+        endDate: MoreThan(monthStart),
+      },
+      order: { startDate: 'ASC' },
+    });
+
+    const dayInMs = 24 * 60 * 60 * 1000;
+    const bookedDates: string[] = [];
+
+    for (
+      let day = monthStart.getTime();
+      day < monthEnd.getTime();
+      day += dayInMs
+    ) {
+      const isBooked = reservations.some(
+        (reservation) =>
+          reservation.startDate.getTime() < day + dayInMs &&
+          reservation.endDate.getTime() > day,
+      );
+
+      if (isBooked) {
+        bookedDates.push(new Date(day).toISOString().slice(0, 10));
+      }
+    }
+
+    return {
+      carId: car.id,
+      carStatus: car.status,
+      month: monthStart.toISOString().slice(0, 7),
+      bookedPeriods: reservations.map((reservation) => ({
+        startDate: reservation.startDate,
+        endDate: reservation.endDate,
+        status: reservation.status,
+      })),
+      bookedDates,
+    };
   }
 
   async update(

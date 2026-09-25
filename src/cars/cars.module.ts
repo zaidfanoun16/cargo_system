@@ -10,6 +10,7 @@ import { CarImage } from './entities/car-image.entity';
 import { CarCategory } from '../car-categories/entities/car-category.entity';
 import { Reservation } from '../reservations/entities/reservation.entity';
 import { AuthModule } from '../auth/auth.module';
+import { ReviewsModule } from '../reviews/reviews.module';
 import { CloudinaryModule } from '../cloudinary/cloudinary.module';
 
 @Module({
@@ -21,6 +22,8 @@ import { CloudinaryModule } from '../cloudinary/cloudinary.module';
     TypeOrmModule.forFeature([Car, CarImage, CarCategory, Reservation]),
 
     AuthModule,
+
+    ReviewsModule,
 
     CloudinaryModule,
   ],

@@ -10,16 +10,23 @@ import {
 import type { Request } from 'express';
 
 import { AuthService } from './auth.service';
+import {
+  EmailRateLimit,
+  StrictRateLimit,
+} from '../common/decorators/rate-limit.decorator';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { LoginDto } from './dto/login.dto';
 import { ResendVerificationDto } from './dto/resend-verification.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { CreateUserDto } from '../users/dto/create-user.dto';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @StrictRateLimit()
   @Post('login')
   login(@Body() loginDto: LoginDto) {
     return this.authService.validateUser(
@@ -28,6 +35,7 @@ export class AuthController {
     );
   }
 
+  @EmailRateLimit()
   @Post('register')
   register(@Body() createUserDto: CreateUserDto) {
     return this.authService.register(createUserDto);
@@ -38,6 +46,7 @@ export class AuthController {
     return this.authService.refreshAccessToken(refreshToken);
   }
 
+  @EmailRateLimit()
   @Post('resend-verification')
   resendVerification(
     @Body() resendVerificationDto: ResendVerificationDto,
@@ -47,11 +56,28 @@ export class AuthController {
     );
   }
 
+  @StrictRateLimit()
   @Post('verify-email')
   verifyEmail(@Body() verifyEmailDto: VerifyEmailDto) {
     return this.authService.verifyEmail(
       verifyEmailDto.email,
       verifyEmailDto.code,
+    );
+  }
+
+  @EmailRateLimit()
+  @Post('forgot-password')
+  forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(forgotPasswordDto.email);
+  }
+
+  @StrictRateLimit()
+  @Post('reset-password')
+  resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+    return this.authService.resetPassword(
+      resetPasswordDto.email,
+      resetPasswordDto.code,
+      resetPasswordDto.newPassword,
     );
   }
 

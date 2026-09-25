@@ -20,6 +20,10 @@ export class User {
   @Column({ unique: true, length: 150 })
   email: string;
 
+  // New email waiting to be confirmed with a code before replacing email.
+  @Column({ type: 'varchar', length: 150, nullable: true })
+  pendingEmail: string | null;
+
   // Email verification status.
   @Column({ default: false })
   isEmailVerified: boolean;
@@ -27,6 +31,11 @@ export class User {
   // SHA-256 hash of the 6-digit code sent to verify the user's email.
   @Column({ type: 'text', nullable: true })
   emailVerificationToken: string | null;
+
+  // What the current code was sent for: register, email-change or
+  // password-reset.
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  verificationPurpose: string | null;
 
   // Wrong verification code attempts since the last code was sent.
   @Column({ default: 0 })

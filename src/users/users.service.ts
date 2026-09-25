@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -9,6 +10,14 @@ import * as bcrypt from 'bcrypt';
 import { Repository } from 'typeorm';
 
 import { UpdateUserDto } from './dto/update-user.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { ChangeEmailDto } from './dto/change-email.dto';
+import { EmailService } from '../email/email.service';
+import {
+  checkVerificationCode,
+  clearVerificationCode,
+  setVerificationCode,
+} from '../common/verification/verification-code';
 import { User } from './entities/user.entity';
 import { Reservation } from '../reservations/entities/reservation.entity';
 
@@ -26,6 +35,8 @@ export class UsersService {
 
     @InjectRepository(Reservation)
     private readonly reservationsRepository: Repository<Reservation>,
+
+    private readonly emailService: EmailService,
   ) { }
 
   // Remove sensitive data before returning the user to the client
@@ -36,6 +47,8 @@ export class UsersService {
       emailVerificationToken: _emailVerificationToken,
       emailVerificationExpiresAt: _emailVerificationExpiresAt,
       emailVerificationAttempts: _emailVerificationAttempts,
+      pendingEmail: _pendingEmail,
+      verificationPurpose: _verificationPurpose,
       ...safeUser
     } = user;
 
@@ -93,22 +106,148 @@ export class UsersService {
       user.fullName = updateUserDto.fullName;
     }
 
-    if (updateUserDto.email !== undefined) {
-      user.email = updateUserDto.email;
-    }
-
-    // If a new password was provided, hash it before saving
-    if (updateUserDto.password !== undefined) {
-      user.passwordHash = await bcrypt.hash(
-        updateUserDto.password,
-        10,
-      );
-    }
-
     const updatedUser = await this.usersRepository.save(user);
 
     // Return updated user without passwordHash
     return this.sanitizeUser(updatedUser);
+  }
+
+  // Change the current user's password (requires the current password)
+  async changePassword(
+    userId: number,
+    changePasswordDto: ChangePasswordDto,
+  ) {
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${userId} not found`);
+    }
+
+    // Someone using an unattended logged-in session must not be able to
+    // take over the account
+    const isCurrentPasswordValid = await bcrypt.compare(
+      changePasswordDto.currentPassword,
+      user.passwordHash,
+    );
+
+    if (!isCurrentPasswordValid) {
+      throw new BadRequestException('Current password is incorrect');
+    }
+
+    user.passwordHash = await bcrypt.hash(
+      changePasswordDto.newPassword,
+      10,
+    );
+
+    // Sign out other sessions: their refresh token stops working
+    user.refreshToken = null;
+
+    await this.usersRepository.save(user);
+
+    return {
+      message: 'Password changed successfully',
+    };
+  }
+
+  // Step 1 of changing the email: check the password and send a code to
+  // the new email. The email only changes once that code is confirmed.
+  async requestEmailChange(
+    userId: number,
+    changeEmailDto: ChangeEmailDto,
+  ) {
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${userId} not found`);
+    }
+
+    const isPasswordValid = await bcrypt.compare(
+      changeEmailDto.password,
+      user.passwordHash,
+    );
+
+    if (!isPasswordValid) {
+      throw new BadRequestException('Password is incorrect');
+    }
+
+    if (changeEmailDto.newEmail === user.email) {
+      throw new BadRequestException(
+        'New email must be different from the current email',
+      );
+    }
+
+    await this.ensureEmailIsFree(changeEmailDto.newEmail);
+
+    user.pendingEmail = changeEmailDto.newEmail;
+    const code = setVerificationCode(user, 'email-change');
+
+    await this.usersRepository.save(user);
+
+    await this.emailService.sendVerificationCode(
+      changeEmailDto.newEmail,
+      user.fullName,
+      code,
+      'Enter this code to confirm your new email:',
+    );
+
+    return {
+      message: 'Verification code sent to the new email',
+    };
+  }
+
+  // Step 2 of changing the email: confirm the code sent to the new email
+  async confirmEmailChange(userId: number, code: string) {
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!user || !user.pendingEmail) {
+      throw new BadRequestException('No email change was requested');
+    }
+
+    const result = checkVerificationCode(user, code, 'email-change');
+
+    if (result === 'too-many-attempts') {
+      throw new BadRequestException(
+        'Too many wrong attempts, please request a new code',
+      );
+    }
+
+    if (result !== 'valid') {
+      // Save the incremented attempts counter
+      if (result === 'wrong') {
+        await this.usersRepository.save(user);
+      }
+
+      throw new BadRequestException(
+        'Invalid or expired verification code',
+      );
+    }
+
+    // Someone may have registered this email while the code was pending
+    await this.ensureEmailIsFree(user.pendingEmail);
+
+    user.email = user.pendingEmail;
+    user.pendingEmail = null;
+    clearVerificationCode(user);
+
+    const updatedUser = await this.usersRepository.save(user);
+
+    return this.sanitizeUser(updatedUser);
+  }
+
+  private async ensureEmailIsFree(email: string) {
+    const existingUser = await this.usersRepository.findOne({
+      where: { email },
+    });
+
+    if (existingUser) {
+      throw new ConflictException('Email is already in use');
+    }
   }
 
   // Update user role (ADMIN only)

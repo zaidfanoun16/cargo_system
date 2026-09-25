@@ -72,7 +72,7 @@ export class EmailService {
           </h2>
 
           <p style="font-size: 16px;">
-            Hi ${fullName},
+            Hi ${escapeHtml(fullName)},
           </p>
 
           <p style="font-size: 15px; line-height: 1.6;">
@@ -97,4 +97,105 @@ export class EmailService {
       `,
     );
   }
+
+  // Tell a user their reservation was confirmed, cancelled or completed
+  async sendReservationStatus(
+    to: string,
+    details: {
+      fullName: string;
+      reservationId: number;
+      status: 'CONFIRMED' | 'CANCELLED' | 'COMPLETED';
+      car: string;
+      startDate: Date;
+      endDate: Date;
+      totalPrice: number;
+    },
+  ) {
+    const statusText = {
+      CONFIRMED: {
+        title: 'Your reservation is confirmed ✅',
+        message: 'Your car is booked. See you on the start date!',
+        color: '#16a34a',
+      },
+      CANCELLED: {
+        title: 'Your reservation was cancelled',
+        message: 'This reservation is no longer active.',
+        color: '#dc2626',
+      },
+      COMPLETED: {
+        title: 'Thanks for renting with us 🚗',
+        message: 'Your reservation is complete. We hope you enjoyed the ride!',
+        color: '#2563eb',
+      },
+    }[details.status];
+
+    const formatDate = (date: Date) =>
+      new Date(date).toISOString().slice(0, 10);
+
+    await this.sendEmail(
+      to,
+      `Reservation #${details.reservationId}: ${details.status.toLowerCase()}`,
+      `
+        <div style="
+          font-family: Arial, sans-serif;
+          max-width: 500px;
+          margin: 0 auto;
+          padding: 30px;
+          color: #333;
+        ">
+
+          <h2 style="margin-bottom: 10px; color: ${statusText.color};">
+            ${statusText.title}
+          </h2>
+
+          <p style="font-size: 16px;">
+            Hi ${escapeHtml(details.fullName)},
+          </p>
+
+          <p style="font-size: 15px; line-height: 1.6;">
+            ${statusText.message}
+          </p>
+
+          <table style="
+            width: 100%;
+            margin: 20px 0;
+            border-collapse: collapse;
+            font-size: 15px;
+          ">
+            <tr>
+              <td style="padding: 8px 0; color: #777;">Reservation</td>
+              <td style="padding: 8px 0; text-align: right;">#${details.reservationId}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #777;">Car</td>
+              <td style="padding: 8px 0; text-align: right;">${escapeHtml(details.car)}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #777;">From</td>
+              <td style="padding: 8px 0; text-align: right;">${formatDate(details.startDate)}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #777;">To</td>
+              <td style="padding: 8px 0; text-align: right;">${formatDate(details.endDate)}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #777;">Total price</td>
+              <td style="padding: 8px 0; text-align: right; font-weight: bold;">${details.totalPrice.toFixed(2)}</td>
+            </tr>
+          </table>
+
+        </div>
+      `,
+    );
+  }
+}
+
+// User-provided text (names, car models) must not be able to inject HTML
+function escapeHtml(text: string) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }

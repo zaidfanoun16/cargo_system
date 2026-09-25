@@ -191,7 +191,7 @@ export class UsersService {
       changeEmailDto.newEmail,
       user.fullName,
       code,
-      'Enter this code to confirm your new email:',
+      'أدخل هذا الرمز لتأكيد بريدك الإلكتروني الجديد:',
     );
 
     return {

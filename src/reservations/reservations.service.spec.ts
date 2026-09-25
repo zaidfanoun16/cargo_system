@@ -5,6 +5,7 @@ import { Reservation } from './entities/reservation.entity';
 import { User } from '../users/entities/user.entity';
 import { Car } from '../cars/entities/car.entity';
 import { ReservationsService } from './reservations.service';
+import { EmailService } from '../email/email.service';
 
 describe('ReservationsService', () => {
   let service: ReservationsService;
@@ -15,6 +16,7 @@ describe('ReservationsService', () => {
     save: jest.fn(),
   };
   const carsRepository = { findOne: jest.fn() };
+  const emailService = { sendReservationStatus: jest.fn() };
 
   const currentUser = { userId: 1, email: 'a@b.com', role: 'USER' };
   const dto = {
@@ -32,6 +34,7 @@ describe('ReservationsService', () => {
         { provide: getRepositoryToken(Reservation), useValue: reservationsRepository },
         { provide: getRepositoryToken(User), useValue: {} },
         { provide: getRepositoryToken(Car), useValue: carsRepository },
+        { provide: EmailService, useValue: emailService },
       ],
     }).compile();
 
@@ -120,6 +123,59 @@ describe('ReservationsService', () => {
         ForbiddenException,
       );
       expect(reservationsRepository.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('status emails', () => {
+    const reservation = {
+      id: 7,
+      userId: 1,
+      status: 'PENDING',
+      startDate: new Date('2030-10-12'),
+      endDate: new Date('2030-10-18'),
+      totalPrice: 300,
+    };
+
+    const withRelations = (status: string) => ({
+      ...reservation,
+      status,
+      user: { email: 'a@b.com', fullName: 'A' },
+      car: { brand: 'Toyota', model: 'Corolla' },
+    });
+
+    beforeEach(() => {
+      reservationsRepository.save.mockImplementation(async (r) => r);
+    });
+
+    it('emails the user when a reservation is confirmed', async () => {
+      reservationsRepository.findOne
+        .mockResolvedValueOnce({ ...reservation })
+        .mockResolvedValueOnce(withRelations('CONFIRMED'));
+
+      await service.confirm(7);
+
+      expect(emailService.sendReservationStatus).toHaveBeenCalledWith(
+        'a@b.com',
+        expect.objectContaining({
+          reservationId: 7,
+          status: 'CONFIRMED',
+          car: 'Toyota Corolla',
+          totalPrice: 300,
+        }),
+      );
+    });
+
+    it('still confirms the reservation when the email fails', async () => {
+      reservationsRepository.findOne
+        .mockResolvedValueOnce({ ...reservation })
+        .mockResolvedValueOnce(withRelations('CONFIRMED'));
+      emailService.sendReservationStatus.mockRejectedValue(
+        new Error('Resend is down'),
+      );
+
+      await expect(service.confirm(7)).resolves.toMatchObject({
+        status: 'CONFIRMED',
+      });
     });
   });
 });

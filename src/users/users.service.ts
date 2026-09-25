@@ -3,8 +3,11 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 import { Repository } from 'typeorm';
@@ -37,7 +40,11 @@ export class UsersService {
     private readonly reservationsRepository: Repository<Reservation>,
 
     private readonly emailService: EmailService,
+
+    private readonly configService: ConfigService,
   ) { }
+
+  private readonly logger = new Logger(UsersService.name);
 
   // Remove sensitive data before returning the user to the client
   private sanitizeUser(user: User) {
@@ -248,6 +255,39 @@ export class UsersService {
     if (existingUser) {
       throw new ConflictException('Email is already in use');
     }
+  }
+
+  // Every day at 3 AM, delete accounts that were never verified, so
+  // abandoned registrations do not pile up. An account is deleted when
+  // UNVERIFIED_ACCOUNT_TTL_DAYS (default 7) have passed since it last
+  // changed; registering again or asking for a new code resets that.
+  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  async deleteUnverifiedAccounts() {
+    const ttlDays = Number(
+      this.configService.get<string>('UNVERIFIED_ACCOUNT_TTL_DAYS') || 7,
+    );
+
+    const cutoff = new Date(Date.now() - ttlDays * 24 * 60 * 60 * 1000);
+
+    const result = await this.usersRepository
+      .createQueryBuilder()
+      .delete()
+      .from(User)
+      .where('"isEmailVerified" = false')
+      .andWhere('"updatedAt" < :cutoff', { cutoff })
+      // Never delete an account that has reservations
+      .andWhere(
+        'NOT EXISTS (SELECT 1 FROM "reservations" r WHERE r."userId" = "users"."id")',
+      )
+      .execute();
+
+    const deleted = result.affected ?? 0;
+
+    if (deleted > 0) {
+      this.logger.log(`Deleted ${deleted} unverified account(s)`);
+    }
+
+    return deleted;
   }
 
   // Update user role (ADMIN only)

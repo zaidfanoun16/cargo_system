@@ -149,6 +149,12 @@ export class ReservationsService {
 
         endDate,
 
+        totalPrice: this.calculateTotalPrice(
+          Number(car.pricePerDay),
+          startDate,
+          endDate,
+        ),
+
       });
 
 
@@ -205,6 +211,7 @@ export class ReservationsService {
           startDate: true,
           endDate: true,
           status: true,
+          totalPrice: true,
           userId: true,
           carId: true,
           createdAt: true,
@@ -273,6 +280,7 @@ export class ReservationsService {
         startDate: true,
         endDate: true,
         status: true,
+        totalPrice: true,
         userId: true,
         carId: true,
         createdAt: true,
@@ -343,6 +351,7 @@ export class ReservationsService {
         startDate: true,
         endDate: true,
         status: true,
+        totalPrice: true,
         userId: true,
         carId: true,
         createdAt: true,
@@ -643,6 +652,26 @@ export class ReservationsService {
     return this.reservationsRepository.save(
       reservation,
     );
+
+  }
+
+
+
+  // Days are counted in whole 24-hour periods, rounding up a partial day.
+  // Prices are multiplied in cents to avoid floating point errors.
+  private calculateTotalPrice(
+    pricePerDay: number,
+    startDate: Date,
+    endDate: Date,
+  ) {
+
+    const dayInMs = 24 * 60 * 60 * 1000;
+
+    const days = Math.ceil(
+      (endDate.getTime() - startDate.getTime()) / dayInMs,
+    );
+
+    return (Math.round(pricePerDay * 100) * days) / 100;
 
   }
 

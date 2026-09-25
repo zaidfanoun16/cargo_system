@@ -23,7 +23,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
 
     private readonly emailService: EmailService,
-  ) {}
+  ) { }
 
   async register(createUserDto: CreateUserDto) {
     // Check if the email is already registered
@@ -158,7 +158,7 @@ export class AuthService {
         role: user.role,
       },
       {
-        expiresIn: '1d',
+        expiresIn: '30m',
       },
     );
 

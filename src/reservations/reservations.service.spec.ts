@@ -1012,4 +1012,45 @@ describe('ReservationsService', () => {
       });
     });
   });
+  describe('handover log', () => {
+    it('lists pickups and returns, newest first, with any delay', async () => {
+      reservationsRepository.find.mockResolvedValue([
+        {
+          id: 8,
+          startDate: new Date('2030-10-12T10:00:00Z'),
+          endDate: new Date('2030-10-14T10:00:00Z'),
+          pickedUpAt: new Date('2030-10-12T09:45:00Z'),
+          returnedAt: null,
+          pickedUpBy: { fullName: 'Staff A' },
+          returnedBy: null,
+        },
+        {
+          id: 7,
+          startDate: new Date('2030-10-10T10:00:00Z'),
+          endDate: new Date('2030-10-11T10:00:00Z'),
+          pickedUpAt: new Date('2030-10-10T10:20:00Z'),
+          // Three hours late
+          returnedAt: new Date('2030-10-11T12:30:00Z'),
+          pickedUpBy: null,
+          returnedBy: { fullName: 'Staff B' },
+        },
+      ]);
+
+      const events = await service.getHandoverLog();
+
+      expect(
+        events.map(({ reservationId, type, staff, lateHours }) => [
+          reservationId,
+          type,
+          staff,
+          lateHours,
+        ]),
+      ).toEqual([
+        [8, 'pickup', 'Staff A', 0],
+        [7, 'return', 'Staff B', 3],
+        // 20 minutes late is not a full hour
+        [7, 'pickup', null, 0],
+      ]);
+    });
+  });
 });

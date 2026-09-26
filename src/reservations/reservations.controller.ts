@@ -152,6 +152,19 @@ export class ReservationsController {
 
 
 
+  // ADMIN sees the log of handovers and returns, to print receipts again
+  // (declared before ':id' so "handovers" is not read as an id)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @Get('handovers')
+  getHandoverLog() {
+
+    return this.reservationsService.getHandoverLog();
+
+  }
+
+
+
   // ADMIN views reservations of a specific user
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')

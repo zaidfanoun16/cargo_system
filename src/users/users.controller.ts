@@ -26,6 +26,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { UpdateBookingAccessDto } from './dto/update-booking-access.dto';
+import { CreateWalkInCustomerDto } from './dto/create-walk-in-customer.dto';
 
 @Controller('users')
 export class UsersController {
@@ -202,5 +203,13 @@ export class UsersController {
       id,
       updateBookingAccessDto.blocked,
     );
+  }
+
+  // A customer who comes to the office without an account
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @Post('walk-in')
+  createWalkInCustomer(@Body() dto: CreateWalkInCustomerDto) {
+    return this.usersService.createWalkInCustomer(dto);
   }
 }

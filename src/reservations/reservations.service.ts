@@ -302,6 +302,164 @@ export class ReservationsService {
 
 
 
+  // ADMIN: Price and availability of a rental that starts now, for a
+  // customer at the office (see walkIn)
+  async walkInQuote(dto: { carId: number; endDate: string }) {
+
+    const { car, startDate, endDate } = await this.walkInPeriod(dto);
+
+
+    let unavailableReason:
+      | 'maintenance'
+      | 'inactive'
+      | 'reserved'
+      | null = null;
+
+    if (car.status === 'MAINTENANCE') {
+      unavailableReason = 'maintenance';
+    } else if (car.status === 'INACTIVE') {
+      unavailableReason = 'inactive';
+    } else if (await this.isReservedDuring(car.id, startDate, endDate)) {
+      unavailableReason = 'reserved';
+    }
+
+
+    return {
+      carId: car.id,
+      startDate,
+      endDate,
+      hours: Math.ceil(
+        (endDate.getTime() - startDate.getTime()) / HOUR_IN_MS,
+      ),
+      available: unavailableReason === null,
+      unavailableReason,
+      ...this.calculatePrice(
+        Number(car.pricePerDay),
+        car.pricePerHour == null ? null : Number(car.pricePerHour),
+        startDate,
+        endDate,
+      ),
+    };
+
+  }
+
+
+
+  // ADMIN: A customer at the office rents a car right now. The staff
+  // checked their ID and license, so the booking is created already
+  // handed over (PICKED_UP), with a code to return the car. The online
+  // rules for customers (notice, active bookings) do not apply.
+  async walkIn(
+    dto: { userId: number; carId: number; endDate: string },
+    staffId: number,
+  ) {
+
+    const customer = await this.usersRepository.findOne({
+      where: {
+        id: dto.userId,
+      },
+    });
+
+    if (!customer) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (customer.bookingBlocked) {
+      throw new ForbiddenException(
+        'This customer is blocked from booking',
+      );
+    }
+
+
+    const quote = await this.walkInQuote(dto);
+
+    if (quote.unavailableReason === 'maintenance') {
+      throw new BadRequestException('Car is currently under maintenance');
+    }
+
+    if (quote.unavailableReason === 'inactive') {
+      throw new BadRequestException('Car is inactive and cannot be reserved');
+    }
+
+    if (quote.unavailableReason === 'reserved') {
+      throw new ConflictException(
+        'Car is already reserved for the selected dates',
+      );
+    }
+
+
+    const reservation = this.reservationsRepository.create({
+      userId: customer.id,
+      carId: quote.carId,
+      startDate: quote.startDate,
+      endDate: quote.endDate,
+      basePrice: quote.basePrice,
+      discountPercent: quote.discountPercent,
+      totalPrice: quote.totalPrice,
+      status: ReservationStatus.PICKED_UP,
+      pickedUpAt: quote.startDate,
+      pickedUpById: staffId,
+      // Shown to the customer to return the car
+      handoverCode: await this.generateHandoverCode(),
+      // Already here, no reminder needed
+      reminderSentAt: quote.startDate,
+    });
+
+
+    const savedReservation =
+      await this.reservationsRepository.save(reservation);
+
+    await this.notifyStatusChange(savedReservation.id);
+
+    return savedReservation;
+
+  }
+
+
+
+  // A walk-in rental starts now (to the minute) and ends on the hour
+  // chosen by the staff
+  private async walkInPeriod(dto: { carId: number; endDate: string }) {
+
+    const car = await this.carsRepository.findOne({
+      where: {
+        id: dto.carId,
+      },
+    });
+
+    if (!car) {
+      throw new NotFoundException('Car not found');
+    }
+
+
+    const startDate = new Date();
+    startDate.setSeconds(0, 0);
+
+    const endDate = new Date(dto.endDate);
+
+
+    if (!this.isOnTheHour(endDate)) {
+      throw new BadRequestException(
+        'Start and end times must be on the hour (minutes and seconds must be 0)',
+      );
+    }
+
+    if (
+      endDate.getTime() - startDate.getTime() <
+      MIN_RESERVATION_HOURS * HOUR_IN_MS
+    ) {
+      throw new BadRequestException(
+        `A reservation must be at least ${MIN_RESERVATION_HOURS} hours`,
+      );
+    }
+
+
+    return { car, startDate, endDate };
+
+  }
+
+
+
   // Loads the car and validates the requested period
   // (shared by create and quote)
   private async loadCarAndPeriod(

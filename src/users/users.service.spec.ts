@@ -22,10 +22,14 @@ describe('UsersService', () => {
     findOne: jest.fn(),
     remove: jest.fn(),
     save: jest.fn(),
+    create: jest.fn(),
     createQueryBuilder: jest.fn(),
   };
   const reservationsRepository = { count: jest.fn() };
-  const emailService = { sendVerificationCode: jest.fn() };
+  const emailService = {
+    sendVerificationCode: jest.fn(),
+    sendWalkInWelcome: jest.fn(),
+  };
   const notificationsService = { notify: jest.fn(), notifyAdmins: jest.fn() };
 
   beforeEach(async () => {
@@ -95,6 +99,67 @@ describe('UsersService', () => {
       await expect(
         service.updateRole(2, { role: 'ADMIN' }, 1),
       ).resolves.toMatchObject({ id: 2, role: 'ADMIN' });
+    });
+  });
+
+  describe('walk-in customer', () => {
+    const dto = {
+      fullName: 'Walk In',
+      email: 'walk@in.com',
+      phoneNumber: '0599123456'.replace(/^0/, '+970'),
+    };
+
+    beforeEach(() => {
+      usersRepository.create.mockImplementation((data) => data);
+      usersRepository.save.mockImplementation(async (data) => ({ id: 20, ...data }));
+    });
+
+    it('creates a verified account with a random password', async () => {
+      usersRepository.findOne.mockResolvedValue(null);
+
+      const user = await service.createWalkInCustomer(dto);
+
+      expect(user).toMatchObject({
+        id: 20,
+        fullName: 'Walk In',
+        phoneNumber: '+970599123456',
+        isEmailVerified: true,
+      });
+      expect(user).not.toHaveProperty('passwordHash');
+      const saved = usersRepository.save.mock.calls[0][0];
+      expect(saved.passwordHash).toMatch(/^\$2[aby]\$/);
+      // Welcome email with the way to set a password
+      expect(emailService.sendWalkInWelcome).toHaveBeenCalledWith(
+        'walk@in.com',
+        'Walk In',
+      );
+    });
+
+    it('still creates the account when the welcome email fails', async () => {
+      usersRepository.findOne.mockResolvedValue(null);
+      emailService.sendWalkInWelcome.mockRejectedValueOnce(new Error('Resend is down'));
+
+      await expect(service.createWalkInCustomer(dto)).resolves.toMatchObject({
+        id: 20,
+      });
+    });
+
+    it('refuses an email that already has an account', async () => {
+      usersRepository.findOne.mockResolvedValueOnce({ id: 2 });
+
+      await expect(service.createWalkInCustomer(dto)).rejects.toThrow(
+        'Email is already registered',
+      );
+    });
+
+    it('refuses a phone number that already has an account', async () => {
+      usersRepository.findOne
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: 2 });
+
+      await expect(service.createWalkInCustomer(dto)).rejects.toThrow(
+        'Phone number is already registered',
+      );
     });
   });
 

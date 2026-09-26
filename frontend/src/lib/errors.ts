@@ -43,6 +43,7 @@ const knownErrors: Record<string, string> = {
   'Only PICKED_UP reservations can be completed': 'admin.errors.notPickedUp',
   'It is too early to hand over this car': 'admin.errors.tooEarly',
   'Invalid handover code': 'handover.errors.invalid',
+  'This customer is blocked from booking': 'walkIn.blocked',
   'This car was already handed over': 'handover.errors.already',
   'This car was already returned': 'handover.errors.alreadyReturned',
   'This car has not been handed over yet': 'handover.errors.notHandedOver',

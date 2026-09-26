@@ -1,7 +1,7 @@
 import { KeyRound } from 'lucide-react'
 import { type FormEvent, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { Field } from '../../components/form/Field'
 import { FormAlert } from '../../components/form/FormAlert'
@@ -16,7 +16,9 @@ export function ForgotPasswordPage() {
   const { t } = useTranslation()
   const { forgotPassword } = useAuth()
   const navigate = useNavigate()
-  const emailFromLogin = (useLocation().state as { email?: string } | null)?.email ?? ''
+  // From the login page, or from the welcome email (?email=)
+  const [params] = useSearchParams()
+  const emailFromLogin = (useLocation().state as { email?: string } | null)?.email ?? params.get('email') ?? ''
 
   const [email, setEmail] = useState(emailFromLogin)
   const [emailError, setEmailError] = useState<string>()

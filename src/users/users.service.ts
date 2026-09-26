@@ -10,11 +10,13 @@ import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
+import { randomBytes } from 'crypto';
 import { Repository } from 'typeorm';
 
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ChangeEmailDto } from './dto/change-email.dto';
+import { CreateWalkInCustomerDto } from './dto/create-walk-in-customer.dto';
 import { EmailService } from '../email/email.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { normalizePhoneNumber } from '../common/phone/phone-number';
@@ -333,6 +335,44 @@ export class UsersService {
     const updatedUser = await this.usersRepository.save(user);
 
     return this.sanitizeUser(updatedUser);
+  }
+
+  // A customer who comes to the office without an account (ADMIN only).
+  // The staff saw their ID, so the email counts as verified; the account
+  // gets a random password, and a welcome email leads the customer to
+  // "forgot password" to set their own.
+  async createWalkInCustomer(dto: CreateWalkInCustomerDto) {
+    const phoneNumber = normalizePhoneNumber(dto.phoneNumber);
+
+    if (await this.usersRepository.findOne({ where: { email: dto.email } })) {
+      throw new ConflictException('Email is already registered');
+    }
+
+    if (await this.usersRepository.findOne({ where: { phoneNumber } })) {
+      throw new ConflictException('Phone number is already registered');
+    }
+
+    const user = this.usersRepository.create({
+      fullName: dto.fullName,
+      email: dto.email,
+      phoneNumber,
+      isEmailVerified: true,
+      passwordHash: await bcrypt.hash(randomBytes(24).toString('hex'), 10),
+    });
+
+    const savedUser = await this.usersRepository.save(user);
+
+    // Tell the customer they have an account and how to set a password.
+    // The account is already made, so a failed email is only logged.
+    try {
+      await this.emailService.sendWalkInWelcome(savedUser.email, savedUser.fullName);
+    } catch (error) {
+      this.logger.warn(
+        `Could not send the welcome email to user ${savedUser.id}: ${(error as Error).message}`,
+      );
+    }
+
+    return this.sanitizeUser(savedUser);
   }
 
   // Stop a user from booking, or allow them again (ADMIN only).

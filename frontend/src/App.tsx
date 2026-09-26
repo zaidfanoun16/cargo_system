@@ -35,6 +35,7 @@ const AdminLayout = lazy(() => import('./pages/admin/AdminLayout').then((m) => (
 const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage })))
 const AdminBookingsPage = lazy(() => import('./pages/admin/AdminBookingsPage').then((m) => ({ default: m.AdminBookingsPage })))
 const ReceiptPage = lazy(() => import('./pages/receipt/ReceiptPage').then((m) => ({ default: m.ReceiptPage })))
+const AdminWalkInPage = lazy(() => import('./pages/admin/AdminWalkInPage').then((m) => ({ default: m.AdminWalkInPage })))
 const AdminHandoverPage = lazy(() => import('./pages/admin/AdminHandoverPage').then((m) => ({ default: m.AdminHandoverPage })))
 const AdminCarsPage = lazy(() => import('./pages/admin/AdminCarsPage').then((m) => ({ default: m.AdminCarsPage })))
 const CarFormPage = lazy(() => import('./pages/admin/CarFormPage').then((m) => ({ default: m.CarFormPage })))
@@ -93,6 +94,7 @@ export default function App() {
                   <Route index element={<AdminDashboardPage />} />
                   <Route path="bookings" element={<AdminBookingsPage />} />
                   <Route path="handover" element={<AdminHandoverPage />} />
+                  <Route path="walk-in" element={<AdminWalkInPage />} />
                   <Route path="cars" element={<AdminCarsPage />} />
                   <Route path="cars/new" element={<CarFormPage />} />
                   <Route path="cars/:id" element={<CarFormPage />} />

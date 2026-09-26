@@ -33,11 +33,19 @@ import { NotificationsModule } from './notifications/notifications.module';
 
       useFactory: (configService: ConfigService) => ({
         type: 'postgres',
+        // Hosted databases give one connection string (DATABASE_URL);
+        // otherwise the DB_* values are used
+        url: configService.get<string>('DATABASE_URL') || undefined,
         host: configService.get<string>('DB_HOST'),
         port: configService.get<number>('DB_PORT'),
         username: configService.get<string>('DB_USERNAME'),
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_NAME'),
+        // Hosted databases require an encrypted connection
+        ssl:
+          configService.get<string>('DB_SSL') === 'true'
+            ? { rejectUnauthorized: false }
+            : false,
 
         // Automatically load entities from feature modules
         autoLoadEntities: true,

@@ -16,6 +16,9 @@ export default new DataSource({
 
   type: 'postgres',
 
+  // Hosted databases give one connection string (DATABASE_URL)
+  url: process.env.DATABASE_URL || undefined,
+
   host: process.env.DB_HOST,
 
   port: Number(process.env.DB_PORT),
@@ -25,6 +28,9 @@ export default new DataSource({
   password: process.env.DB_PASSWORD || '',
 
   database: process.env.DB_NAME,
+
+  // Hosted databases require an encrypted connection
+  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
 
   entities: [
     User,

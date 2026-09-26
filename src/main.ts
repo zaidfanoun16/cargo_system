@@ -1,11 +1,19 @@
 import { HttpAdapterHost, NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 
 import { AppModule } from './app.module';
 import { UniqueViolationFilter } from './common/filters/unique-violation.filter';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Behind a hosting proxy every request comes from the proxy, so the
+  // rate limits would count all users together. TRUST_PROXY=true uses
+  // the visitor's address from the proxy instead.
+  if (process.env.TRUST_PROXY === 'true') {
+    app.set('trust proxy', 1);
+  }
 
   app.useGlobalPipes(
     new ValidationPipe({

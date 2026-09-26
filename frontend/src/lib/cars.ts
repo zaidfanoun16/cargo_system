@@ -113,6 +113,8 @@ export type Booking = {
   totalPrice: number
   createdAt: string
   lateCancellation: boolean
+  // Shown (as a QR code) to pick up the car; only while CONFIRMED
+  handoverCode: string | null
   pickedUpAt: string | null
   returnedAt: string | null
   reviewed: boolean

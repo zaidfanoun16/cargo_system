@@ -1,4 +1,4 @@
-import { ArrowLeft, CalendarX2, CarFront, CircleAlert, CircleCheck, Clock, RotateCcw, ShieldCheck, Star, XCircle } from 'lucide-react'
+import { ArrowLeft, CalendarX2, CarFront, CircleAlert, CircleCheck, Clock, QrCode, RotateCcw, ShieldCheck, Star, XCircle } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
@@ -17,6 +17,7 @@ import { type Booking, carName } from '../../lib/cars'
 import { formatDate } from '../../lib/dates'
 import { errorKey } from '../../lib/errors'
 import { formatNumber, formatPrice } from '../../lib/format'
+import { HandoverDialog } from './HandoverDialog'
 import { ReviewDialog } from './ReviewDialog'
 
 type Tab = 'upcoming' | 'past' | 'cancelled'
@@ -45,6 +46,7 @@ export function MyBookingsPage() {
   const [chosenTab, setChosenTab] = useState<Tab>()
   const [cancelling, setCancelling] = useState<number>()
   const [reviewing, setReviewing] = useState<Booking | null>(null)
+  const [showingCode, setShowingCode] = useState<Booking | null>(null)
 
   const list = bookings.data ?? []
   const counts: Record<Tab, number> = { upcoming: 0, past: 0, cancelled: 0 }
@@ -168,6 +170,7 @@ export function MyBookingsPage() {
               const tooLate =
                 booking.status === 'CONFIRMED' && !canCancel && new Date(booking.startDate).getTime() > now
               const canReview = booking.status === 'COMPLETED' && !booking.reviewed
+              const hasCode = booking.status === 'CONFIRMED' && booking.handoverCode !== null
 
               return (
                 <li
@@ -262,8 +265,14 @@ export function MyBookingsPage() {
                       </p>
                     )}
 
-                    {(canCancel || canReview || booking.reviewed) && (
+                    {(hasCode || canCancel || canReview || booking.reviewed) && (
                       <div className="mt-auto flex flex-wrap gap-2 border-t border-border pt-4">
+                        {hasCode && (
+                          <Button className="h-10" onClick={() => setShowingCode(booking)}>
+                            <QrCode className="size-4" aria-hidden />
+                            {t('handover.show')}
+                          </Button>
+                        )}
                         {canReview && (
                           <Button className="h-10" onClick={() => setReviewing(booking)}>
                             <Star className="size-4" aria-hidden />
@@ -296,6 +305,8 @@ export function MyBookingsPage() {
           </ul>
         )}
       </div>
+
+      <HandoverDialog booking={showingCode} onClose={() => setShowingCode(null)} onHandedOver={bookings.reload} />
 
       <ReviewDialog
         reservationId={reviewing?.id ?? null}

@@ -56,8 +56,10 @@ describe('StatsService', () => {
     expect(stats.reservationsByStatus).toEqual({
       PENDING: 0,
       CONFIRMED: 0,
+      PICKED_UP: 0,
       CANCELLED: 0,
       COMPLETED: 3,
+      NO_SHOW: 0,
     });
 
     // 12 months, ending with this month; empty months are 0

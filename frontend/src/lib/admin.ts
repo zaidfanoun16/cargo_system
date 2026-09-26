@@ -27,7 +27,19 @@ export type AdminBooking = {
   discountPercent: number
   totalPrice: number
   createdAt: string
-  user: { id: number; fullName: string; email: string; phoneNumber: string | null; role: string }
+  lateCancellation: boolean
+  pickedUpAt: string | null
+  returnedAt: string | null
+  user: {
+    id: number
+    fullName: string
+    email: string
+    phoneNumber: string | null
+    role: string
+    bookingBlocked: boolean
+    // How reliable the customer has been, over all their bookings
+    record: { completed: number; lateCancellations: number; noShows: number }
+  }
   car: Pick<Car, 'id' | 'brand' | 'brandAr' | 'model' | 'modelAr'> & { licensePlate: string }
 }
 
@@ -38,6 +50,7 @@ export type AdminUser = {
   phoneNumber: string | null
   role: 'USER' | 'ADMIN'
   isEmailVerified: boolean
+  bookingBlocked: boolean
   createdAt: string
 }
 

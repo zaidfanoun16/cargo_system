@@ -24,7 +24,7 @@ import { CarsQueryDto } from './dto/cars-query.dto';
 import { CarCategory } from '../car-categories/entities/car-category.entity';
 import { CarStatus } from './enums/car-status.enum';
 import { Reservation } from '../reservations/entities/reservation.entity';
-import { ReservationStatus } from '../reservations/enums/reservation-status.enum';
+import { ACTIVE_STATUSES } from '../reservations/reservation-policy';
 import { ReviewsService } from '../reviews/reviews.service';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 
@@ -203,10 +203,7 @@ export class CarsService {
     const reservations = await this.reservationsRepository.find({
       select: { carId: true },
       where: {
-        status: In([
-          ReservationStatus.PENDING,
-          ReservationStatus.CONFIRMED,
-        ]),
+        status: In(ACTIVE_STATUSES),
         startDate: LessThan(end),
         endDate: MoreThan(start),
       },
@@ -248,15 +245,12 @@ export class CarsService {
     const monthStart = new Date(Date.UTC(year, monthIndex, 1));
     const monthEnd = new Date(Date.UTC(year, monthIndex + 1, 1));
 
-    // Same rule as creating a reservation: PENDING and CONFIRMED block
+    // Same rule as creating a reservation: active reservations block
     const reservations = await this.reservationsRepository.find({
       select: { startDate: true, endDate: true, status: true },
       where: {
         carId: id,
-        status: In([
-          ReservationStatus.PENDING,
-          ReservationStatus.CONFIRMED,
-        ]),
+        status: In(ACTIVE_STATUSES),
         startDate: LessThan(monthEnd),
         endDate: MoreThan(monthStart),
       },

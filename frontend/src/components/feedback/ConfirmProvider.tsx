@@ -15,9 +15,14 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   const { t } = useTranslation()
   const dialog = useRef<HTMLDialogElement>(null)
   const [request, setRequest] = useState<Request | null>(null)
+  const [acknowledged, setAcknowledged] = useState(false)
 
   const confirm = useCallback(
-    (options: ConfirmOptions) => new Promise<boolean>((resolve) => setRequest({ options, resolve })),
+    (options: ConfirmOptions) =>
+      new Promise<boolean>((resolve) => {
+        setAcknowledged(false)
+        setRequest({ options, resolve })
+      }),
     [],
   )
 
@@ -75,12 +80,24 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
                 {options.message}
               </div>
             )}
+            {options.acknowledge && (
+              <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-2xl border border-border p-3 text-sm font-semibold">
+                <input
+                  type="checkbox"
+                  checked={acknowledged}
+                  onChange={(event) => setAcknowledged(event.target.checked)}
+                  className="mt-0.5 size-4 shrink-0 accent-[var(--primary)]"
+                />
+                {options.acknowledge}
+              </label>
+            )}
             <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <Button variant="secondary" className="h-11" onClick={() => close(false)} autoFocus>
                 {options.cancelLabel ?? t('confirm.cancel')}
               </Button>
               <Button
                 className={`h-11 ${danger ? 'bg-red-600 text-white hover:bg-red-700 dark:bg-red-600 dark:text-white dark:hover:bg-red-500' : ''}`}
+                disabled={Boolean(options.acknowledge) && !acknowledged}
                 onClick={() => close(true)}
               >
                 {options.confirmLabel ?? t('confirm.ok')}

@@ -13,7 +13,7 @@ import { formatNumber, formatPrice } from '../../lib/format'
 import { AdminHeader } from './AdminLayout'
 import { RevenueChart } from './RevenueChart'
 
-const STATUSES: BookingStatus[] = ['PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED']
+const STATUSES: BookingStatus[] = ['PENDING', 'CONFIRMED', 'PICKED_UP', 'COMPLETED', 'NO_SHOW', 'CANCELLED']
 
 export function AdminDashboardPage() {
   const { t, i18n } = useTranslation()

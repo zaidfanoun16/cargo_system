@@ -1,4 +1,8 @@
-import { ConflictException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { getRepositoryToken } from '@nestjs/typeorm';
@@ -17,7 +21,9 @@ describe('ReservationsService', () => {
     find: jest.fn(),
     create: jest.fn(),
     save: jest.fn(),
+    count: jest.fn(),
   };
+  const usersRepository = { findOne: jest.fn(), update: jest.fn() };
   const carsRepository = { findOne: jest.fn() };
   const reviewsRepository = { find: jest.fn() };
   const emailService = { sendReservationStatus: jest.fn() };
@@ -39,7 +45,7 @@ describe('ReservationsService', () => {
           provide: getRepositoryToken(Reservation),
           useValue: reservationsRepository,
         },
-        { provide: getRepositoryToken(User), useValue: {} },
+        { provide: getRepositoryToken(User), useValue: usersRepository },
         { provide: getRepositoryToken(Car), useValue: carsRepository },
         { provide: getRepositoryToken(Review), useValue: reviewsRepository },
         { provide: EmailService, useValue: emailService },
@@ -58,6 +64,7 @@ describe('ReservationsService', () => {
     beforeEach(() => {
       // PostgreSQL returns decimals as strings
       carsRepository.findOne.mockResolvedValue({ id: 5, pricePerDay: '50.00' });
+      usersRepository.findOne.mockResolvedValue({ id: 1, bookingBlocked: false });
       reservationsRepository.create.mockImplementation((data) => data);
       reservationsRepository.save.mockImplementation(async (data) => data);
     });
@@ -96,6 +103,15 @@ describe('ReservationsService', () => {
           currentUser,
         ),
       ).resolves.toMatchObject({ totalPrice: 59.97 });
+    });
+
+    it('refuses a user who is blocked from booking', async () => {
+      usersRepository.findOne.mockResolvedValue({ id: 1, bookingBlocked: true });
+
+      await expect(service.create(dto, currentUser)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      expect(reservationsRepository.save).not.toHaveBeenCalled();
     });
 
     it('rejects dates that overlap an active reservation', async () => {
@@ -264,6 +280,29 @@ describe('ReservationsService', () => {
       expect(reservationsRepository.find).toHaveBeenCalledWith(
         expect.objectContaining({ where: { userId: 1 } }),
       );
+    });
+
+    it('says until when each reservation can be cancelled', async () => {
+      const startDate = new Date('2030-10-12T10:00:00Z');
+      reservationsRepository.find.mockResolvedValue([
+        { id: 7, status: 'CONFIRMED', startDate },
+        { id: 8, status: 'PENDING', startDate },
+        { id: 9, status: 'COMPLETED', startDate },
+      ]);
+      reviewsRepository.find.mockResolvedValue([]);
+
+      const [confirmed, pending, completed] =
+        await service.getMyReservations(1);
+
+      expect(confirmed.cancellation).toEqual({
+        freeUntil: new Date('2030-10-11T10:00:00Z'),
+        until: new Date('2030-10-12T08:00:00Z'),
+      });
+      expect(pending.cancellation).toEqual({
+        freeUntil: startDate,
+        until: startDate,
+      });
+      expect(completed.cancellation).toBeNull();
     });
 
     it('skips the review lookup when there are no reservations', async () => {
@@ -488,6 +527,224 @@ describe('ReservationsService', () => {
       expect(byStart.status).toBe('PENDING');
       expect(createdBefore).toEqual(new Date('2030-01-14T12:00:00Z'));
       expect(startedBy).toEqual(now);
+    });
+  });
+  describe('cancellation policy', () => {
+    // Pickup is on 2030-10-12 at 10:00
+    const startDate = new Date('2030-10-12T10:00:00Z');
+
+    const confirmed = () => ({
+      id: 7,
+      userId: 1,
+      status: 'CONFIRMED',
+      lateCancellation: false,
+      startDate,
+      endDate: new Date('2030-10-14T10:00:00Z'),
+    });
+
+    afterEach(() => jest.useRealTimers());
+
+    beforeEach(() => {
+      reservationsRepository.save.mockImplementation(async (r) => r);
+      usersRepository.findOne.mockResolvedValue({ id: 1, bookingBlocked: false });
+      reservationsRepository.count.mockResolvedValue(0);
+    });
+
+    it('cancels for free more than 24 hours before pickup', async () => {
+      jest.useFakeTimers({ now: new Date('2030-10-11T09:00:00Z') });
+      reservationsRepository.findOne.mockResolvedValue(confirmed());
+
+      await expect(service.cancel(7, 1, 'USER')).resolves.toMatchObject({
+        status: 'CANCELLED',
+        lateCancellation: false,
+      });
+      expect(reservationsRepository.count).not.toHaveBeenCalled();
+    });
+
+    it('counts a cancellation in the last 24 hours as late', async () => {
+      jest.useFakeTimers({ now: new Date('2030-10-11T11:00:00Z') });
+      reservationsRepository.findOne.mockResolvedValue(confirmed());
+
+      await expect(service.cancel(7, 1, 'USER')).resolves.toMatchObject({
+        status: 'CANCELLED',
+        lateCancellation: true,
+      });
+    });
+
+    it('refuses to cancel online in the last 2 hours', async () => {
+      jest.useFakeTimers({ now: new Date('2030-10-12T08:30:00Z') });
+      const reservation = confirmed();
+      reservationsRepository.findOne.mockResolvedValue(reservation);
+
+      await expect(service.cancel(7, 1, 'USER')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(reservation.status).toBe('CONFIRMED');
+      expect(reservationsRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('lets an admin cancel in the last 2 hours without a strike', async () => {
+      jest.useFakeTimers({ now: new Date('2030-10-12T08:30:00Z') });
+      reservationsRepository.findOne.mockResolvedValue(confirmed());
+
+      await expect(service.cancel(7, 9, 'ADMIN')).resolves.toMatchObject({
+        status: 'CANCELLED',
+        lateCancellation: false,
+      });
+    });
+
+    it('lets a PENDING reservation be cancelled for free until pickup', async () => {
+      jest.useFakeTimers({ now: new Date('2030-10-12T09:00:00Z') });
+      reservationsRepository.findOne.mockResolvedValue({
+        ...confirmed(),
+        status: 'PENDING',
+      });
+
+      await expect(service.cancel(7, 1, 'USER')).resolves.toMatchObject({
+        status: 'CANCELLED',
+        lateCancellation: false,
+      });
+    });
+
+    it('blocks the user after 3 late cancellations', async () => {
+      jest.useFakeTimers({ now: new Date('2030-10-11T11:00:00Z') });
+      reservationsRepository.findOne.mockResolvedValue(confirmed());
+      // 3 late cancellations, no no-shows
+      reservationsRepository.count
+        .mockResolvedValueOnce(3)
+        .mockResolvedValueOnce(0);
+
+      await service.cancel(7, 1, 'USER');
+
+      expect(usersRepository.update).toHaveBeenCalledWith(1, {
+        bookingBlocked: true,
+      });
+    });
+
+    it('does not block after 2 late cancellations', async () => {
+      jest.useFakeTimers({ now: new Date('2030-10-11T11:00:00Z') });
+      reservationsRepository.findOne.mockResolvedValue(confirmed());
+      reservationsRepository.count
+        .mockResolvedValueOnce(2)
+        .mockResolvedValueOnce(0);
+
+      await service.cancel(7, 1, 'USER');
+
+      expect(usersRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('only counts strikes since an admin last allowed the user', async () => {
+      jest.useFakeTimers({ now: new Date('2030-10-11T11:00:00Z') });
+      const resetAt = new Date('2030-10-01T00:00:00Z');
+      usersRepository.findOne.mockResolvedValue({
+        id: 1,
+        bookingBlocked: false,
+        strikesResetAt: resetAt,
+      });
+      reservationsRepository.findOne.mockResolvedValue(confirmed());
+
+      await service.cancel(7, 1, 'USER');
+
+      const [lateQuery] = reservationsRepository.count.mock.calls[0];
+      expect(lateQuery.where.cancelledAt.value).toEqual(resetAt);
+    });
+  });
+
+  describe('pickup and return', () => {
+    const reservation = () => ({
+      id: 7,
+      userId: 1,
+      status: 'CONFIRMED',
+      startDate: new Date('2030-10-12T10:00:00Z'),
+      endDate: new Date('2030-10-14T10:00:00Z'),
+    });
+
+    afterEach(() => jest.useRealTimers());
+
+    beforeEach(() => {
+      reservationsRepository.save.mockImplementation(async (r) => r);
+    });
+
+    it('refuses to hand the car over more than an hour early', async () => {
+      jest.useFakeTimers({ now: new Date('2030-10-12T08:30:00Z') });
+      reservationsRepository.findOne.mockResolvedValue(reservation());
+
+      await expect(service.pickUp(7)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+
+    it('hands the car over from an hour before pickup', async () => {
+      const now = new Date('2030-10-12T09:15:00Z');
+      jest.useFakeTimers({ now });
+      reservationsRepository.findOne.mockResolvedValue(reservation());
+
+      await expect(service.pickUp(7)).resolves.toMatchObject({
+        status: 'PICKED_UP',
+        pickedUpAt: now,
+      });
+    });
+
+    it('only completes a reservation whose car was picked up', async () => {
+      reservationsRepository.findOne.mockResolvedValue(reservation());
+
+      await expect(service.complete(7)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+
+    it('accepts the car back before the end date', async () => {
+      jest.useFakeTimers({ now: new Date('2030-10-13T10:00:00Z') });
+      reservationsRepository.findOne.mockResolvedValue({
+        ...reservation(),
+        status: 'PICKED_UP',
+      });
+
+      await expect(service.complete(7)).resolves.toMatchObject({
+        status: 'COMPLETED',
+        returnedAt: new Date('2030-10-13T10:00:00Z'),
+      });
+    });
+  });
+
+  describe('markNoShows', () => {
+    const now = new Date('2030-01-15T12:00:00Z');
+
+    afterEach(() => jest.useRealTimers());
+
+    beforeEach(() => {
+      jest.useFakeTimers({ now });
+      reservationsRepository.save.mockImplementation(async (r) => r);
+      reservationsRepository.findOne.mockResolvedValue(null);
+      usersRepository.findOne.mockResolvedValue({ id: 1, bookingBlocked: false });
+      reservationsRepository.count.mockResolvedValue(0);
+    });
+
+    it('marks confirmed reservations not picked up an hour after pickup', async () => {
+      const missed = [{ id: 1, userId: 1, status: 'CONFIRMED' }];
+      reservationsRepository.find.mockResolvedValue(missed);
+
+      await expect(service.markNoShows()).resolves.toBe(1);
+
+      expect(missed[0].status).toBe('NO_SHOW');
+      const { where } = reservationsRepository.find.mock.calls[0][0];
+      expect(where.status).toBe('CONFIRMED');
+      expect(where.startDate.value).toEqual(new Date('2030-01-15T11:00:00Z'));
+    });
+
+    it('blocks the user after 2 no-shows', async () => {
+      reservationsRepository.find.mockResolvedValue([
+        { id: 1, userId: 1, status: 'CONFIRMED' },
+      ]);
+      reservationsRepository.count
+        .mockResolvedValueOnce(0)
+        .mockResolvedValueOnce(2);
+
+      await service.markNoShows();
+
+      expect(usersRepository.update).toHaveBeenCalledWith(1, {
+        bookingBlocked: true,
+      });
     });
   });
 });

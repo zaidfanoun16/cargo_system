@@ -1,4 +1,4 @@
-import { ArrowLeft, CalendarX2, CircleCheck, Clock, RotateCcw, Star, XCircle } from 'lucide-react'
+import { ArrowLeft, CalendarX2, CarFront, CircleAlert, CircleCheck, Clock, RotateCcw, ShieldCheck, Star, XCircle } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
@@ -21,9 +21,16 @@ import { ReviewDialog } from './ReviewDialog'
 type Tab = 'upcoming' | 'past' | 'cancelled'
 
 function tabOf(booking: Booking, now: number): Tab {
-  if (booking.status === 'CANCELLED') return 'cancelled'
+  if (booking.status === 'CANCELLED' || booking.status === 'NO_SHOW') return 'cancelled'
+  // The customer still has the car, even if the return time has passed
+  if (booking.status === 'PICKED_UP') return 'upcoming'
   if (booking.status === 'COMPLETED' || new Date(booking.endDate).getTime() <= now) return 'past'
   return 'upcoming'
+}
+
+// Cancelling now would count as a late cancellation
+function isLate(booking: Booking, now: number) {
+  return booking.cancellation !== null && now > new Date(booking.cancellation.freeUntil).getTime()
 }
 
 export function MyBookingsPage() {
@@ -50,9 +57,19 @@ export function MyBookingsPage() {
 
   async function cancel(booking: Booking) {
     const name = carName(booking.car, language)
+    const late = isLate(booking, new Date().getTime())
     const confirmed = await confirm({
       title: t('bookings.cancelTitle'),
-      message: t('bookings.cancelText', { car: name, date: dateTime(booking.startDate) }),
+      message: (
+        <>
+          <p>{t('bookings.cancelText', { car: name, date: dateTime(booking.startDate) })}</p>
+          {late && (
+            <p className="mt-3 rounded-2xl bg-amber-100 p-3 font-semibold text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+              {t('bookings.lateCancelWarning')}
+            </p>
+          )}
+        </>
+      ),
       confirmLabel: t('bookings.cancelConfirm'),
       cancelLabel: t('bookings.keep'),
       tone: 'danger',
@@ -146,8 +163,9 @@ export function MyBookingsPage() {
             {shown.map((booking) => {
               const name = carName(booking.car, language)
               const canCancel =
-                (booking.status === 'PENDING' || booking.status === 'CONFIRMED') &&
-                new Date(booking.startDate).getTime() > now
+                booking.cancellation !== null && now < new Date(booking.cancellation.until).getTime()
+              const tooLate =
+                booking.status === 'CONFIRMED' && !canCancel && new Date(booking.startDate).getTime() > now
               const canReview = booking.status === 'COMPLETED' && !booking.reviewed
 
               return (
@@ -169,7 +187,14 @@ export function MyBookingsPage() {
                           {t('bookings.number', { id: formatNumber(booking.id, language) })}
                         </p>
                       </div>
-                      <StatusBadge status={booking.status} />
+                      <div className="flex flex-wrap gap-1.5">
+                        {booking.lateCancellation && (
+                          <span className="inline-block rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                            {t('bookings.lateCancelled')}
+                          </span>
+                        )}
+                        <StatusBadge status={booking.status} />
+                      </div>
                     </div>
 
                     <dl className="grid gap-3 text-sm sm:grid-cols-3">
@@ -198,6 +223,41 @@ export function MyBookingsPage() {
                       <p className="flex items-center gap-2 text-xs text-muted">
                         <Clock className="size-4 shrink-0" aria-hidden />
                         {t('bookings.pendingNote')}
+                      </p>
+                    )}
+
+                    {booking.status === 'CONFIRMED' && canCancel && (
+                      <p
+                        className={`flex items-center gap-2 text-xs font-semibold ${
+                          isLate(booking, now) ? 'text-amber-800 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-400'
+                        }`}
+                      >
+                        {isLate(booking, now) ? (
+                          <CircleAlert className="size-4 shrink-0" aria-hidden />
+                        ) : (
+                          <ShieldCheck className="size-4 shrink-0" aria-hidden />
+                        )}
+                        {isLate(booking, now)
+                          ? t('bookings.lateUntil', { date: dateTime(booking.cancellation!.until) })
+                          : t('bookings.freeUntil', { date: dateTime(booking.cancellation!.freeUntil) })}
+                      </p>
+                    )}
+                    {tooLate && (
+                      <p className="flex items-center gap-2 text-xs text-muted">
+                        <Clock className="size-4 shrink-0" aria-hidden />
+                        {t('bookings.tooLateNote')}
+                      </p>
+                    )}
+                    {booking.status === 'PICKED_UP' && (
+                      <p className="flex items-center gap-2 text-xs font-semibold text-blue-700 dark:text-blue-300">
+                        <CarFront className="size-4 shrink-0" aria-hidden />
+                        {t('bookings.pickedUpNote', { date: dateTime(booking.endDate) })}
+                      </p>
+                    )}
+                    {booking.status === 'NO_SHOW' && (
+                      <p className="flex items-center gap-2 text-xs font-semibold text-orange-800 dark:text-orange-300">
+                        <CircleAlert className="size-4 shrink-0" aria-hidden />
+                        {t('bookings.noShowNote')}
                       </p>
                     )}
 

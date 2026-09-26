@@ -15,12 +15,23 @@ import {
   LessThan,
   LessThanOrEqual,
   MoreThan,
+  MoreThanOrEqual,
   Repository,
 } from 'typeorm';
 
 import { Reservation } from './entities/reservation.entity';
 import { ReservationStatus } from './enums/reservation-status.enum';
 import { UpdateReservationStatusDto } from './dto/update-reservation-status.dto';
+import {
+  ACTIVE_STATUSES,
+  EARLY_PICKUP_HOURS,
+  MAX_LATE_CANCELLATIONS,
+  MAX_NO_SHOWS,
+  NO_SHOW_GRACE_HOURS,
+  POLICY,
+  STRIKE_WINDOW_DAYS,
+  cancellationWindow,
+} from './reservation-policy';
 
 import { User } from '../users/entities/user.entity';
 import { Car } from '../cars/entities/car.entity';
@@ -30,6 +41,8 @@ import { EmailService } from '../email/email.service';
 
 // Shortest reservation allowed
 const MIN_RESERVATION_HOURS = 2;
+
+const HOUR_IN_MS = 60 * 60 * 1000;
 
 // Discounts for long rentals, longest first
 const DURATION_DISCOUNTS = [
@@ -83,6 +96,20 @@ export class ReservationsService {
       role: string;
     },
   ) {
+
+    // Too many late cancellations or no-shows (see reservation-policy.ts)
+    const user = await this.usersRepository.findOne({
+      where: {
+        id: currentUser.userId,
+      },
+    });
+
+    if (user?.bookingBlocked) {
+      throw new ForbiddenException(
+        'Your account cannot make new reservations. Please contact us',
+      );
+    }
+
 
     const { car, startDate, endDate } =
       await this.loadCarAndPeriod(createReservationDto);
@@ -191,6 +218,14 @@ export class ReservationsService {
 
       unavailableReason,
 
+      // Once confirmed, the booking can be cancelled for free until then
+      freeCancellationUntil: cancellationWindow({
+        status: ReservationStatus.CONFIRMED,
+        startDate,
+      })!.freeUntil,
+
+      policy: POLICY,
+
       ...this.calculatePrice(
         Number(car.pricePerDay),
         car.pricePerHour == null ? null : Number(car.pricePerHour),
@@ -280,7 +315,7 @@ export class ReservationsService {
 
 
 
-  // True when an active (PENDING or CONFIRMED) reservation
+  // True when an active (PENDING, CONFIRMED or PICKED_UP) reservation
   // overlaps the period
   private async isReservedDuring(
     carId: number,
@@ -294,10 +329,7 @@ export class ReservationsService {
         where: {
           carId,
 
-          status: In([
-            ReservationStatus.PENDING,
-            ReservationStatus.CONFIRMED,
-          ]),
+          status: In(ACTIVE_STATUSES),
 
           startDate: LessThan(endDate),
 
@@ -358,6 +390,8 @@ export class ReservationsService {
     return reservations.map((reservation) => ({
       ...reservation,
       reviewed: reviewedIds.has(reservation.id),
+      // Until when it can be cancelled (and for free), or null
+      cancellation: cancellationWindow(reservation),
     }));
 
   }
@@ -391,6 +425,10 @@ export class ReservationsService {
           basePrice: true,
         discountPercent: true,
         totalPrice: true,
+          lateCancellation: true,
+          cancelledAt: true,
+          pickedUpAt: true,
+          returnedAt: true,
           userId: true,
           carId: true,
           createdAt: true,
@@ -444,10 +482,12 @@ export class ReservationsService {
 
 
 
-  // ADMIN: Get all reservations
+  // ADMIN: Get all reservations, each with the customer's record
+  // (completed rentals, late cancellations and no-shows), so the admin
+  // can decide whether to confirm
   async findAll() {
 
-    return this.reservationsRepository.find({
+    const reservations = await this.reservationsRepository.find({
 
       relations: {
         user: true,
@@ -462,6 +502,10 @@ export class ReservationsService {
         basePrice: true,
         discountPercent: true,
         totalPrice: true,
+        lateCancellation: true,
+        cancelledAt: true,
+        pickedUpAt: true,
+        returnedAt: true,
         userId: true,
         carId: true,
         createdAt: true,
@@ -473,6 +517,7 @@ export class ReservationsService {
           email: true,
           phoneNumber: true,
           role: true,
+          bookingBlocked: true,
         },
 
         car: {
@@ -497,6 +542,77 @@ export class ReservationsService {
       },
 
     });
+
+
+    const records = await this.getUserRecords(
+      [...new Set(reservations.map((reservation) => reservation.userId))],
+    );
+
+
+    return reservations.map((reservation) => ({
+      ...reservation,
+      user: {
+        ...reservation.user,
+        record: records.get(reservation.userId) ?? {
+          completed: 0,
+          lateCancellations: 0,
+          noShows: 0,
+        },
+      },
+    }));
+
+  }
+
+
+
+  // How reliable each user has been, counted over all their reservations
+  private async getUserRecords(userIds: number[]) {
+
+    const records = new Map<
+      number,
+      { completed: number; lateCancellations: number; noShows: number }
+    >();
+
+    if (userIds.length === 0) {
+      return records;
+    }
+
+
+    const rows: {
+      userId: number;
+      completed: string;
+      lateCancellations: string;
+      noShows: string;
+    }[] = await this.reservationsRepository
+      .createQueryBuilder('reservation')
+      .select('reservation.userId', 'userId')
+      .addSelect(
+        `COUNT(*) FILTER (WHERE "reservation"."status" = '${ReservationStatus.COMPLETED}')`,
+        'completed',
+      )
+      .addSelect(
+        `COUNT(*) FILTER (WHERE "reservation"."lateCancellation")`,
+        'lateCancellations',
+      )
+      .addSelect(
+        `COUNT(*) FILTER (WHERE "reservation"."status" = '${ReservationStatus.NO_SHOW}')`,
+        'noShows',
+      )
+      .where('reservation.userId IN (:...userIds)', { userIds })
+      .groupBy('reservation.userId')
+      .getRawMany();
+
+
+    // PostgreSQL returns counts as strings
+    for (const row of rows) {
+      records.set(Number(row.userId), {
+        completed: Number(row.completed),
+        lateCancellations: Number(row.lateCancellations),
+        noShows: Number(row.noShows),
+      });
+    }
+
+    return records;
 
   }
 
@@ -543,6 +659,10 @@ export class ReservationsService {
         basePrice: true,
         discountPercent: true,
         totalPrice: true,
+        lateCancellation: true,
+        cancelledAt: true,
+        pickedUpAt: true,
+        returnedAt: true,
         userId: true,
         carId: true,
         createdAt: true,
@@ -620,50 +740,69 @@ export class ReservationsService {
 
 
 
-  // ADMIN: Complete a confirmed reservation
-  async complete(id: number) {
+  // ADMIN: Hand the car over to the customer. Allowed from shortly
+  // before pickup until the end of the reservation.
+  async pickUp(id: number) {
 
-    const reservation =
-      await this.reservationsRepository.findOne({
-
-        where: {
-          id,
-        },
-
-      });
+    const reservation = await this.findReservation(id);
 
 
-    if (!reservation) {
-      throw new NotFoundException(
-        'Reservation not found',
-      );
-    }
-
-
-    // Only CONFIRMED reservations can be completed
-    if (
-      reservation.status !==
-      ReservationStatus.CONFIRMED
-    ) {
+    if (reservation.status !== ReservationStatus.CONFIRMED) {
       throw new BadRequestException(
-        'Only CONFIRMED reservations can be completed',
+        'Only CONFIRMED reservations can be picked up',
       );
     }
 
 
-    // Reservation cannot be completed
-    // before its end date
     const now = new Date();
 
-    if (reservation.endDate > now) {
+    const earliest = new Date(
+      reservation.startDate.getTime() - EARLY_PICKUP_HOURS * HOUR_IN_MS,
+    );
+
+    if (now < earliest) {
       throw new BadRequestException(
-        'Reservation cannot be completed before the end date',
+        'It is too early to hand over this car',
+      );
+    }
+
+    if (now >= reservation.endDate) {
+      throw new BadRequestException(
+        'This reservation has already ended',
       );
     }
 
 
-    reservation.status =
-      ReservationStatus.COMPLETED;
+    reservation.status = ReservationStatus.PICKED_UP;
+    reservation.pickedUpAt = now;
+
+
+    const savedReservation =
+      await this.reservationsRepository.save(reservation);
+
+    await this.notifyStatusChange(savedReservation.id);
+
+    return savedReservation;
+
+  }
+
+
+
+  // ADMIN: The customer returned the car. It can come back early.
+  async complete(id: number) {
+
+    const reservation = await this.findReservation(id);
+
+
+    if (reservation.status !== ReservationStatus.PICKED_UP) {
+      throw new BadRequestException(
+        'Only PICKED_UP reservations can be completed',
+      );
+    }
+
+
+    reservation.status = ReservationStatus.COMPLETED;
+    reservation.returnedAt = new Date();
 
 
     const savedReservation =
@@ -684,21 +823,7 @@ export class ReservationsService {
     role: string,
   ) {
 
-    const reservation =
-      await this.reservationsRepository.findOne({
-
-        where: {
-          id,
-        },
-
-      });
-
-
-    if (!reservation) {
-      throw new NotFoundException(
-        'Reservation not found',
-      );
-    }
+    const reservation = await this.findReservation(id);
 
 
     // USER can cancel only his own reservation
@@ -711,6 +836,25 @@ export class ReservationsService {
       );
     }
 
+
+    // An admin cancelling someone else's booking, or the customer
+    const cancelledBy =
+      role === 'ADMIN' && reservation.userId !== userId ? 'admin' : 'user';
+
+    return this.cancelReservation(reservation, cancelledBy);
+
+  }
+
+
+
+  // The customer follows the cancellation policy (reservation-policy.ts):
+  // free until FREE_CANCELLATION_HOURS before pickup, then counted as a
+  // late cancellation, and not possible online in the last
+  // CANCELLATION_CUTOFF_HOURS. An admin can cancel until pickup.
+  private async cancelReservation(
+    reservation: Reservation,
+    cancelledBy: 'user' | 'admin',
+  ) {
 
     // Only PENDING or CONFIRMED reservations can be cancelled
     if (
@@ -733,18 +877,33 @@ export class ReservationsService {
     }
 
 
-    reservation.status =
-      ReservationStatus.CANCELLED;
+    if (cancelledBy === 'user') {
+
+      const window = cancellationWindow(reservation)!;
+
+      if (now > window.until) {
+        throw new BadRequestException(
+          'It is too late to cancel this reservation online. Please contact us',
+        );
+      }
+
+      reservation.lateCancellation = now > window.freeUntil;
+
+    }
+
+
+    reservation.status = ReservationStatus.CANCELLED;
+    reservation.cancelledAt = now;
 
 
     const savedReservation =
       await this.reservationsRepository.save(reservation);
 
-    // An admin cancelling someone else's booking, or the customer
-    const cancelledBy =
-      role === 'ADMIN' && reservation.userId !== userId ? 'admin' : 'user';
-
     await this.notifyStatusChange(savedReservation.id, cancelledBy);
+
+    if (savedReservation.lateCancellation) {
+      await this.applyStrikes(savedReservation.userId);
+    }
 
     return savedReservation;
 
@@ -752,11 +911,42 @@ export class ReservationsService {
 
 
 
-  // ADMIN: Update reservation status
+  // ADMIN: Update reservation status, with the same rules as the
+  // dedicated routes
   async updateStatus(
     id: number,
     updateStatusDto: UpdateReservationStatusDto,
   ) {
+
+    switch (updateStatusDto.status) {
+
+      case ReservationStatus.CONFIRMED:
+        return this.confirm(id);
+
+      case ReservationStatus.PICKED_UP:
+        return this.pickUp(id);
+
+      case ReservationStatus.COMPLETED:
+        return this.complete(id);
+
+      case ReservationStatus.CANCELLED:
+        return this.cancelReservation(
+          await this.findReservation(id),
+          'admin',
+        );
+
+      default:
+        throw new BadRequestException(
+          `Cannot change reservation status to ${updateStatusDto.status}`,
+        );
+
+    }
+
+  }
+
+
+
+  private async findReservation(id: number) {
 
     const reservation =
       await this.reservationsRepository.findOne({
@@ -774,91 +964,7 @@ export class ReservationsService {
       );
     }
 
-
-    const currentStatus = reservation.status;
-    const newStatus = updateStatusDto.status;
-
-
-    // PENDING -> CONFIRMED
-    if (
-      currentStatus === ReservationStatus.PENDING &&
-      newStatus === ReservationStatus.CONFIRMED
-    ) {
-
-      reservation.status =
-        ReservationStatus.CONFIRMED;
-
-    }
-
-
-    // PENDING -> CANCELLED
-    else if (
-      currentStatus === ReservationStatus.PENDING &&
-      newStatus === ReservationStatus.CANCELLED
-    ) {
-
-      reservation.status =
-        ReservationStatus.CANCELLED;
-
-    }
-
-
-    // CONFIRMED -> COMPLETED
-    else if (
-      currentStatus === ReservationStatus.CONFIRMED &&
-      newStatus === ReservationStatus.COMPLETED
-    ) {
-
-      const now = new Date();
-
-      if (reservation.endDate > now) {
-        throw new BadRequestException(
-          'Reservation cannot be completed before the end date',
-        );
-      }
-
-      reservation.status =
-        ReservationStatus.COMPLETED;
-
-    }
-
-
-    // CONFIRMED -> CANCELLED
-    else if (
-      currentStatus === ReservationStatus.CONFIRMED &&
-      newStatus === ReservationStatus.CANCELLED
-    ) {
-
-      const now = new Date();
-
-      if (reservation.startDate <= now) {
-        throw new BadRequestException(
-          'Reservation cannot be cancelled after the start date',
-        );
-      }
-
-      reservation.status =
-        ReservationStatus.CANCELLED;
-
-    }
-
-
-    // All other transitions are not allowed
-    else {
-
-      throw new BadRequestException(
-        `Cannot change reservation status from ${currentStatus} to ${newStatus}`,
-      );
-
-    }
-
-
-    const savedReservation =
-      await this.reservationsRepository.save(reservation);
-
-    await this.notifyStatusChange(savedReservation.id, 'admin');
-
-    return savedReservation;
+    return reservation;
 
   }
 
@@ -1009,8 +1115,120 @@ export class ReservationsService {
 
 
 
-  // Email the user when their reservation is confirmed, cancelled or
-  // completed. A failed email must not undo the status change, so errors
+  // Every 10 minutes, mark CONFIRMED reservations whose car was not
+  // picked up NO_SHOW_GRACE_HOURS after pickup time. The car becomes free
+  // again and the no-show counts against the customer.
+  @Cron(CronExpression.EVERY_10_MINUTES)
+  async markNoShows() {
+
+    const startedBefore = new Date(
+      Date.now() - NO_SHOW_GRACE_HOURS * HOUR_IN_MS,
+    );
+
+
+    const missedReservations =
+      await this.reservationsRepository.find({
+
+        where: {
+          status: ReservationStatus.CONFIRMED,
+          startDate: LessThanOrEqual(startedBefore),
+        },
+
+      });
+
+
+    for (const reservation of missedReservations) {
+
+      reservation.status = ReservationStatus.NO_SHOW;
+
+      await this.reservationsRepository.save(reservation);
+
+      await this.notifyStatusChange(reservation.id);
+
+      await this.applyStrikes(reservation.userId);
+
+    }
+
+
+    if (missedReservations.length > 0) {
+      this.logger.log(
+        `Marked ${missedReservations.length} reservation(s) as no-show`,
+      );
+    }
+
+
+    return missedReservations.length;
+
+  }
+
+
+
+  // Stop a user from booking after MAX_LATE_CANCELLATIONS late
+  // cancellations or MAX_NO_SHOWS no-shows in the last STRIKE_WINDOW_DAYS.
+  // Only strikes after an admin last allowed the user again count.
+  private async applyStrikes(userId: number) {
+
+    const user = await this.usersRepository.findOne({
+      where: {
+        id: userId,
+      },
+    });
+
+    if (!user || user.bookingBlocked) {
+      return;
+    }
+
+
+    const windowStart = new Date(
+      Date.now() - STRIKE_WINDOW_DAYS * 24 * HOUR_IN_MS,
+    );
+
+    const since =
+      user.strikesResetAt && user.strikesResetAt > windowStart
+        ? user.strikesResetAt
+        : windowStart;
+
+
+    const [lateCancellations, noShows] = await Promise.all([
+
+      this.reservationsRepository.count({
+        where: {
+          userId,
+          lateCancellation: true,
+          cancelledAt: MoreThanOrEqual(since),
+        },
+      }),
+
+      this.reservationsRepository.count({
+        where: {
+          userId,
+          status: ReservationStatus.NO_SHOW,
+          startDate: MoreThanOrEqual(since),
+        },
+      }),
+
+    ]);
+
+
+    if (
+      lateCancellations >= MAX_LATE_CANCELLATIONS ||
+      noShows >= MAX_NO_SHOWS
+    ) {
+
+      await this.usersRepository.update(userId, { bookingBlocked: true });
+
+      this.logger.log(
+        `Blocked user ${userId} from booking (${lateCancellations} late cancellation(s), ${noShows} no-show(s))`,
+      );
+
+    }
+
+  }
+
+
+
+  // Email the user when their reservation is confirmed, picked up,
+  // cancelled, completed or missed. A failed email must not undo the status change, so errors
   // are only logged.
   // cancelledBy: who cancelled, so the email can say it (see EmailService)
   private async notifyStatusChange(
@@ -1060,6 +1278,7 @@ export class ReservationsService {
           discountPercent: reservation.discountPercent,
           totalPrice: Number(reservation.totalPrice),
           cancelledBy,
+          lateCancellation: reservation.lateCancellation,
         },
       );
 

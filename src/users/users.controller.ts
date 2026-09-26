@@ -25,6 +25,7 @@ import { ConfirmEmailChangeDto } from './dto/confirm-email-change.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
+import { UpdateBookingAccessDto } from './dto/update-booking-access.dto';
 
 @Controller('users')
 export class UsersController {
@@ -187,6 +188,19 @@ export class UsersController {
       id,
       updateUserRoleDto,
       currentUser.userId,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @Patch(':id/booking-access')
+  updateBookingAccess(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateBookingAccessDto: UpdateBookingAccessDto,
+  ) {
+    return this.usersService.updateBookingAccess(
+      id,
+      updateBookingAccessDto.blocked,
     );
   }
 }

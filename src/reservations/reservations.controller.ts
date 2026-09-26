@@ -153,7 +153,21 @@ export class ReservationsController {
 
 
 
-  // ADMIN completes a confirmed reservation
+  // ADMIN hands the car over to the customer
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @Patch(':id/pickup')
+  pickUp(
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+
+    return this.reservationsService.pickUp(id);
+
+  }
+
+
+
+  // ADMIN marks the car as returned
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   @Patch(':id/complete')

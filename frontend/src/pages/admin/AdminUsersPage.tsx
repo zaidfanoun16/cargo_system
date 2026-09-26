@@ -1,4 +1,4 @@
-import { MessageCircle, Search, ShieldCheck, ShieldOff, Trash2, UserRound } from 'lucide-react'
+import { Ban, CalendarCheck, MessageCircle, Search, ShieldCheck, ShieldOff, Trash2, UserRound } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -42,6 +42,26 @@ export function AdminUsersPage() {
     try {
       await api(`/users/${user.id}/role`, { method: 'PATCH', auth: true, body: { role } })
       toast.success(t('admin.users.roleChanged', { name: user.fullName }))
+      users.reload()
+    } catch (caught) {
+      toast.error(t(errorKey(caught)))
+    }
+  }
+
+  // Stop a user from booking, or allow them again
+  async function setBookingBlocked(user: AdminUser, blocked: boolean) {
+    const key = blocked ? 'block' : 'unblock'
+    const confirmed = await confirm({
+      title: t(`admin.users.${key}Title`, { name: user.fullName }),
+      message: t(`admin.users.${key}Text`),
+      confirmLabel: t(`admin.users.${key}`),
+      tone: blocked ? 'danger' : 'default',
+    })
+    if (!confirmed) return
+
+    try {
+      await api(`/users/${user.id}/booking-access`, { method: 'PATCH', auth: true, body: { blocked } })
+      toast.success(t(`admin.users.${key}Done`, { name: user.fullName }))
       users.reload()
     } catch (caught) {
       toast.error(t(errorKey(caught)))
@@ -118,6 +138,12 @@ export function AdminUsersPage() {
                         </span>
                       )}
                       {isMe && <span className="rounded-full border border-border px-2 py-0.5 text-xs font-semibold text-muted">{t('admin.users.you')}</span>}
+                      {user.bookingBlocked && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-800 dark:bg-red-950 dark:text-red-300">
+                          <Ban className="size-3.5" aria-hidden />
+                          {t('admin.users.blocked')}
+                        </span>
+                      )}
                       {!user.isEmailVerified && (
                         <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-900 dark:bg-amber-950 dark:text-amber-200">
                           {t('admin.users.unverified')}
@@ -143,6 +169,25 @@ export function AdminUsersPage() {
                   {/* Your own role and account are managed elsewhere */}
                   {!isMe && (
                     <div className="flex shrink-0 gap-1">
+                      {user.bookingBlocked ? (
+                        <button
+                          type="button"
+                          onClick={() => setBookingBlocked(user, false)}
+                          className="inline-flex h-10 items-center gap-1.5 rounded-xl px-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/40"
+                        >
+                          <CalendarCheck className="size-4" aria-hidden />
+                          <span className="max-sm:sr-only">{t('admin.users.unblock')}</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setBookingBlocked(user, true)}
+                          className="inline-flex h-10 items-center gap-1.5 rounded-xl px-3 text-sm font-semibold text-muted hover:bg-surface-muted hover:text-text"
+                        >
+                          <Ban className="size-4" aria-hidden />
+                          <span className="max-sm:sr-only">{t('admin.users.block')}</span>
+                        </button>
+                      )}
                       {user.role === 'ADMIN' ? (
                         <button
                           type="button"

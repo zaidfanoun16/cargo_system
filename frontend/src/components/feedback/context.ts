@@ -7,6 +7,8 @@ export type ConfirmOptions = {
   cancelLabel?: string
   // "danger" for actions that cannot be undone, like cancelling a booking
   tone?: 'default' | 'danger'
+  // A checkbox the user must tick before confirming, e.g. accepting a policy
+  acknowledge?: string
 }
 
 export type Confirm = (options: ConfirmOptions) => Promise<boolean>

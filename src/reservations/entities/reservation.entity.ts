@@ -68,6 +68,25 @@ export class Reservation {
   status: ReservationStatus;
 
 
+  // True when the customer cancelled a CONFIRMED reservation after the
+  // free cancellation period (see reservation-policy.ts)
+  @Column({ default: false })
+  lateCancellation: boolean;
+
+
+  @Column({ type: 'timestamp', nullable: true })
+  cancelledAt: Date | null;
+
+
+  // When the car was handed over to the customer, and when it came back
+  @Column({ type: 'timestamp', nullable: true })
+  pickedUpAt: Date | null;
+
+
+  @Column({ type: 'timestamp', nullable: true })
+  returnedAt: Date | null;
+
+
   // Reservation belongs to one user
   @ManyToOne(() => User)
   @JoinColumn({ name: 'userId' })

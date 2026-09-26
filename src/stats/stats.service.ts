@@ -7,6 +7,7 @@ import { ReservationStatus } from '../reservations/enums/reservation-status.enum
 // Reservations that bring in money
 const EARNING_STATUSES = [
   ReservationStatus.CONFIRMED,
+  ReservationStatus.PICKED_UP,
   ReservationStatus.COMPLETED,
 ];
 

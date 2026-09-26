@@ -124,6 +124,33 @@ describe('EmailService', () => {
       expect(expired.html).toContain('تلقائياً');
     });
 
+    it('tells when free cancellation ends', async () => {
+      const email = await sentEmail();
+
+      // 24 hours before pickup, in Palestine time
+      expect(email.html).toContain('الإلغاء مجاني من صفحة حجوزاتي حتى');
+      expect(email.html).toContain('٣٠ سبتمبر ٢٠٣٠');
+    });
+
+    it('says when a cancellation was late', async () => {
+      const email = await sentEmail({
+        status: 'CANCELLED',
+        cancelledBy: 'user',
+        lateCancellation: true,
+      });
+
+      expect(email.html).toContain('احتُسب إلغاءً متأخراً');
+    });
+
+    it('has an email for pickup and for a no-show', async () => {
+      expect((await sentEmail({ status: 'PICKED_UP' })).subject).toBe(
+        'CarGo · حجز رقم 15: تم الاستلام',
+      );
+      expect((await sentEmail({ status: 'NO_SHOW' })).subject).toBe(
+        'CarGo · حجز رقم 15: لم يتم الاستلام',
+      );
+    });
+
     it('escapes HTML in names', async () => {
       const email = await sentEmail({ fullName: '<b>x</b>' });
 

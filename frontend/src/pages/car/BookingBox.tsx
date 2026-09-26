@@ -88,13 +88,17 @@ export function BookingBox({ car, initialStart, initialEnd }: Props) {
     const confirmed = await confirm({
       title: t('booking.confirmTitle'),
       message: (
-        <dl className="mt-1 space-y-1.5 rounded-2xl bg-surface-muted/70 p-4 text-text">
-          <SummaryRow label={t('booking.car')} value={carName(car, language)} />
-          <SummaryRow label={t('booking.pickup')} value={when(start)} />
-          <SummaryRow label={t('booking.return')} value={when(end)} />
-          <SummaryRow label={t('booking.total')} value={formatPrice(current.totalPrice, language)} strong />
-        </dl>
+        <>
+          <dl className="mt-1 space-y-1.5 rounded-2xl bg-surface-muted/70 p-4 text-text">
+            <SummaryRow label={t('booking.car')} value={carName(car, language)} />
+            <SummaryRow label={t('booking.pickup')} value={when(start)} />
+            <SummaryRow label={t('booking.return')} value={when(end)} />
+            <SummaryRow label={t('booking.total')} value={formatPrice(current.totalPrice, language)} strong />
+          </dl>
+          <PolicySummary quote={current} now={Date.now()} />
+        </>
       ),
+      acknowledge: t('booking.acceptPolicy'),
       confirmLabel: t('booking.confirmButton'),
     })
     if (!confirmed) return
@@ -292,6 +296,33 @@ function PeriodRow({ label, children }: { label: string; children: ReactNode }) 
     <div>
       <p className="mb-1.5 text-sm font-semibold">{label}</p>
       <div className="grid grid-cols-[1fr_auto] gap-2 [&>select]:w-32">{children}</div>
+    </div>
+  )
+}
+
+// The cancellation and no-show rules, with the numbers from the server
+function PolicySummary({ quote, now }: { quote: Quote; now: number }) {
+  const { t, i18n } = useTranslation()
+  const language = i18n.language
+  const { policy } = quote
+  const hours = (count: number) => t('booking.withinHours', { count, formatted: formatNumber(count, language) })
+  const freeUntil = new Date(quote.freeCancellationUntil)
+
+  return (
+    <div className="mt-3">
+      <p className="font-bold text-text">{t('booking.policyTitle')}</p>
+      <ul className="mt-1 list-disc space-y-1 ps-5">
+        <li>
+          {freeUntil.getTime() > now
+            ? t('booking.policyFree', {
+                date: formatDate(freeUntil, language, { weekday: 'short', hour: 'numeric', minute: '2-digit' }),
+              })
+            : t('booking.policyNoFree')}
+        </li>
+        <li>{t('booking.policyCutoff', { hours: hours(policy.cancellationCutoffHours) })}</li>
+        <li>{t('booking.policyNoShow', { hours: hours(policy.noShowGraceHours) })}</li>
+        <li>{t('booking.policyStrikes')}</li>
+      </ul>
     </div>
   )
 }

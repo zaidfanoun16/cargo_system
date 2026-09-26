@@ -61,6 +61,16 @@ export class User {
   @Column({ default: 'USER' })
   role: string;
 
+  // Too many late cancellations or no-shows: the user cannot make new
+  // reservations until an admin allows it again.
+  @Column({ default: false })
+  bookingBlocked: boolean;
+
+  // When an admin last allowed the user to book again. Late cancellations
+  // and no-shows before this time no longer count.
+  @Column({ type: 'timestamp', nullable: true })
+  strikesResetAt: Date | null;
+
   // Automatically stores when the user was created.
   @CreateDateColumn()
   createdAt: Date;

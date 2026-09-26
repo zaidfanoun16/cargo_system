@@ -5,6 +5,13 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
 
+import {
+  CANCELLATION_CUTOFF_HOURS,
+  NO_SHOW_GRACE_HOURS,
+  cancellationWindow,
+} from '../reservations/reservation-policy';
+import { ReservationStatus } from '../reservations/enums/reservation-status.enum';
+
 @Injectable()
 export class EmailService {
   private readonly resend: Resend;
@@ -120,7 +127,7 @@ export class EmailService {
     to: string,
     details: ReservationEmailDetails,
   ) {
-    const text = statusText(details);
+    const text = statusText(details, (date) => this.formatDateTime(date));
 
     const rows: [string, string][] = [
       ['رقم الحجز', toArabicDigits(details.reservationId)],
@@ -234,7 +241,7 @@ export class EmailService {
 export type ReservationEmailDetails = {
   fullName: string;
   reservationId: number;
-  status: 'CONFIRMED' | 'CANCELLED' | 'COMPLETED';
+  status: 'CONFIRMED' | 'PICKED_UP' | 'CANCELLED' | 'COMPLETED' | 'NO_SHOW';
   car: string;
   licensePlate: string;
   startDate: Date;
@@ -244,6 +251,8 @@ export type ReservationEmailDetails = {
   totalPrice: number;
   // Who cancelled: the customer, an admin, or the system (not confirmed in time)
   cancelledBy?: 'user' | 'admin' | 'system';
+  // The customer cancelled after the free cancellation period
+  lateCancellation?: boolean;
 };
 
 type StatusText = {
@@ -258,8 +267,21 @@ type StatusText = {
   button: { label: string; path: string };
 };
 
-function statusText(details: ReservationEmailDetails): StatusText {
+function statusText(
+  details: ReservationEmailDetails,
+  formatDateTime: (date: Date) => string,
+): StatusText {
   if (details.status === 'CONFIRMED') {
+    const { freeUntil } = cancellationWindow({
+      status: ReservationStatus.CONFIRMED,
+      startDate: details.startDate,
+    })!;
+
+    const cancelStep =
+      freeUntil > new Date()
+        ? `الإلغاء مجاني من صفحة حجوزاتي حتى ${formatDateTime(freeUntil)}. بعدها يُحتسب الإلغاء متأخراً، ولا يمكن الإلغاء قبل الاستلام بأقل من ${hoursText(CANCELLATION_CUTOFF_HOURS)}.`
+        : `الإلغاء الآن يُحتسب متأخراً، ولا يمكن الإلغاء قبل الاستلام بأقل من ${hoursText(CANCELLATION_CUTOFF_HOURS)}.`;
+
     return {
       subject: 'تم التأكيد',
       badge: 'مؤكد',
@@ -270,10 +292,43 @@ function statusText(details: ReservationEmailDetails): StatusText {
       stepsTitle: 'قبل موعد الاستلام',
       steps: [
         'أحضر هويتك ورخصة قيادة سارية المفعول.',
-        'احضر في موعد الاستلام المذكور أعلاه.',
-        'يمكنك إلغاء الحجز من صفحة حجوزاتي قبل موعد الاستلام.',
+        `احضر في موعد الاستلام المذكور أعلاه. إذا لم تحضر خلال ${hoursText(NO_SHOW_GRACE_HOURS)} يُلغى الحجز ويُسجَّل عدم حضور.`,
+        cancelStep,
+        'تكرار الإلغاء المتأخر أو عدم الحضور يوقف إمكانية الحجز من حسابك.',
       ],
       button: { label: 'عرض حجوزاتي', path: '/my-bookings' },
+    };
+  }
+
+  if (details.status === 'PICKED_UP') {
+    return {
+      subject: 'تم الاستلام',
+      badge: 'مستلمة',
+      title: 'استلمت السيارة، رحلة سعيدة 🚗',
+      message: 'تم تسليمك السيارة. نتمنى لك رحلة آمنة وممتعة.',
+      color: '#1d4ed8',
+      badgeBackground: '#dbeafe',
+      stepsTitle: 'عند الإرجاع',
+      steps: [
+        'أرجع السيارة إلى المكتب في موعد الإرجاع المذكور أعلاه.',
+        'أعد السيارة بنفس الحالة ومستوى الوقود الذي استلمتها به.',
+      ],
+      button: { label: 'عرض حجوزاتي', path: '/my-bookings' },
+    };
+  }
+
+  if (details.status === 'NO_SHOW') {
+    return {
+      subject: 'لم يتم الاستلام',
+      badge: 'لم يحضر',
+      title: 'لم تستلم السيارة في الموعد',
+      message:
+        'انتهت مهلة الاستلام دون حضورك، فتم إلغاء الحجز وتسجيل عدم حضور على حسابك. تكرار ذلك يوقف إمكانية الحجز.',
+      color: '#b45309',
+      badgeBackground: '#fef3c7',
+      stepsTitle: '',
+      steps: [],
+      button: { label: 'احجز سيارة أخرى', path: '/cars' },
     };
   }
 
@@ -292,7 +347,9 @@ function statusText(details: ReservationEmailDetails): StatusText {
   }
 
   const message = {
-    user: 'لقد ألغيت هذا الحجز بنجاح، ولن يتم احتسابه.',
+    user: details.lateCancellation
+      ? 'لقد ألغيت هذا الحجز بعد انتهاء فترة الإلغاء المجاني، لذلك احتُسب إلغاءً متأخراً. تكرار ذلك يوقف إمكانية الحجز.'
+      : 'لقد ألغيت هذا الحجز بنجاح، ولن يتم احتسابه.',
     admin: 'نعتذر منك، تم إلغاء حجزك من قبل إدارة CarGo. تواصل معنا إذا كان لديك أي سؤال.',
     system: 'تم إلغاء الحجز تلقائياً لأنه لم يتم تأكيده في الوقت المحدد.',
   }[details.cancelledBy ?? 'admin'];
@@ -320,6 +377,13 @@ export function formatShekels(amount: number) {
     minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
     maximumFractionDigits: 2,
   }).format(value);
+}
+
+// "ساعتين", "٢٤ ساعة"
+function hoursText(hours: number) {
+  if (hours === 1) return 'ساعة';
+  if (hours === 2) return 'ساعتين';
+  return `${toArabicDigits(hours)} ${hours <= 10 ? 'ساعات' : 'ساعة'}`;
 }
 
 function toArabicDigits(value: number) {

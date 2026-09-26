@@ -332,6 +332,29 @@ export class UsersService {
     return this.sanitizeUser(updatedUser);
   }
 
+  // Stop a user from booking, or allow them again (ADMIN only).
+  // Allowing again starts a clean record: earlier late cancellations and
+  // no-shows no longer count towards the next block.
+  async updateBookingAccess(id: number, blocked: boolean) {
+    const user = await this.usersRepository.findOne({
+      where: { id },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
+
+    user.bookingBlocked = blocked;
+
+    if (!blocked) {
+      user.strikesResetAt = new Date();
+    }
+
+    const updatedUser = await this.usersRepository.save(user);
+
+    return this.sanitizeUser(updatedUser);
+  }
+
   // Delete user
   async remove(
     id: number,

@@ -1,4 +1,4 @@
-import { CalendarX2, Check, CheckCheck, MessageCircle, Search, X } from 'lucide-react'
+import { Ban, CalendarX2, Check, CheckCheck, KeyRound, MessageCircle, Search, X } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router-dom'
@@ -17,9 +17,9 @@ import { errorKey } from '../../lib/errors'
 import { formatNumber, formatPrice } from '../../lib/format'
 import { AdminHeader } from './AdminLayout'
 
-const FILTERS: (BookingStatus | 'ALL')[] = ['PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'ALL']
+const FILTERS: (BookingStatus | 'ALL')[] = ['PENDING', 'CONFIRMED', 'PICKED_UP', 'COMPLETED', 'NO_SHOW', 'CANCELLED', 'ALL']
 
-type Action = 'confirm' | 'complete' | 'cancel'
+type Action = 'confirm' | 'pickup' | 'complete' | 'cancel'
 
 export function AdminBookingsPage() {
   const { t, i18n } = useTranslation()
@@ -141,7 +141,9 @@ export function AdminBookingsPage() {
               const ended = new Date(booking.endDate).getTime() <= now
               const actions: Action[] = []
               if (booking.status === 'PENDING') actions.push('confirm')
-              if (booking.status === 'CONFIRMED' && ended) actions.push('complete')
+              // The server checks the handover time (from an hour before pickup)
+              if (booking.status === 'CONFIRMED' && !ended) actions.push('pickup')
+              if (booking.status === 'PICKED_UP') actions.push('complete')
               if ((booking.status === 'PENDING' || booking.status === 'CONFIRMED') && !started) actions.push('cancel')
 
               return (
@@ -159,13 +161,23 @@ export function AdminBookingsPage() {
                         </span>
                       </Link>
                     </div>
-                    <StatusBadge status={booking.status} />
+                    <div className="flex flex-wrap gap-1.5">
+                      {booking.lateCancellation && (
+                        <span className="inline-block rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                          {t('bookings.lateCancelled')}
+                        </span>
+                      )}
+                      <StatusBadge status={booking.status} />
+                    </div>
                   </div>
 
                   <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
                     <div>
                       <dt className="text-xs font-semibold text-muted">{t('admin.bookings.customer')}</dt>
                       <dd className="mt-0.5 font-semibold">{booking.user.fullName}</dd>
+                      <dd className="mt-1">
+                        <CustomerRecord user={booking.user} />
+                      </dd>
                       <dd className="truncate text-xs text-muted">
                         <bdi dir="ltr">{booking.user.email}</bdi>
                       </dd>
@@ -212,6 +224,12 @@ export function AdminBookingsPage() {
                           {t('admin.bookings.confirm')}
                         </Button>
                       )}
+                      {actions.includes('pickup') && (
+                        <Button className="h-10" disabled={busy === booking.id} onClick={() => run(booking, 'pickup')}>
+                          <KeyRound className="size-4" aria-hidden />
+                          {t('admin.bookings.pickup')}
+                        </Button>
+                      )}
                       {actions.includes('complete') && (
                         <Button className="h-10" disabled={busy === booking.id} onClick={() => run(booking, 'complete')}>
                           <CheckCheck className="size-4" aria-hidden />
@@ -238,5 +256,44 @@ export function AdminBookingsPage() {
         )}
       </div>
     </>
+  )
+}
+
+// Completed rentals, late cancellations and no-shows, so the admin can
+// decide whether to confirm a request
+function CustomerRecord({ user }: { user: AdminBooking['user'] }) {
+  const { t, i18n } = useTranslation()
+  const { completed, lateCancellations, noShows } = user.record
+  const count = (value: number) => ({ formatted: formatNumber(value, i18n.language) })
+  const chip = 'rounded-full px-2 py-0.5 text-xs font-bold'
+
+  return (
+    <ul className="flex flex-wrap gap-1" aria-label={t('admin.bookings.record')}>
+      {user.bookingBlocked && (
+        <li className={`${chip} inline-flex items-center gap-1 bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300`}>
+          <Ban className="size-3" aria-hidden />
+          {t('admin.users.blocked')}
+        </li>
+      )}
+      {completed + lateCancellations + noShows === 0 ? (
+        <li className={`${chip} bg-surface-muted text-muted`}>{t('admin.bookings.newCustomer')}</li>
+      ) : (
+        <>
+          <li className={`${chip} bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300`}>
+            {t('admin.bookings.completed', count(completed))}
+          </li>
+          {lateCancellations > 0 && (
+            <li className={`${chip} bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200`}>
+              {t('admin.bookings.lateCancellations', count(lateCancellations))}
+            </li>
+          )}
+          {noShows > 0 && (
+            <li className={`${chip} bg-orange-100 text-orange-900 dark:bg-orange-950 dark:text-orange-200`}>
+              {t('admin.bookings.noShows', count(noShows))}
+            </li>
+          )}
+        </>
+      )}
+    </ul>
   )
 }

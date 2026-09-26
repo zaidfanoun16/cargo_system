@@ -11,6 +11,7 @@ import { Review } from '../reviews/entities/review.entity';
 
 import { AuthModule } from '../auth/auth.module';
 import { EmailModule } from '../email/email.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 
 @Module({
@@ -26,6 +27,8 @@ import { EmailModule } from '../email/email.module';
     AuthModule,
 
     EmailModule,
+
+    NotificationsModule,
   ],
 
   controllers: [

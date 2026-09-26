@@ -13,6 +13,7 @@ import { Car } from '../cars/entities/car.entity';
 import { Review } from '../reviews/entities/review.entity';
 import { ReservationsService } from './reservations.service';
 import { EmailService } from '../email/email.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 describe('ReservationsService', () => {
   let service: ReservationsService;
@@ -28,6 +29,7 @@ describe('ReservationsService', () => {
   const carsRepository = { findOne: jest.fn() };
   const reviewsRepository = { find: jest.fn() };
   const emailService = { sendReservationStatus: jest.fn() };
+  const notificationsService = { notify: jest.fn(), notifyAdmins: jest.fn() };
 
   const currentUser = { userId: 1, email: 'a@b.com', role: 'USER' };
   const dto = {
@@ -50,6 +52,7 @@ describe('ReservationsService', () => {
         { provide: getRepositoryToken(Car), useValue: carsRepository },
         { provide: getRepositoryToken(Review), useValue: reviewsRepository },
         { provide: EmailService, useValue: emailService },
+        { provide: NotificationsService, useValue: notificationsService },
         { provide: ConfigService, useValue: { get: () => undefined } },
       ],
     }).compile();
@@ -1177,6 +1180,99 @@ describe('ReservationsService', () => {
       await expect(service.confirm(7)).resolves.toMatchObject({
         reminderSentAt: now,
       });
+    });
+  });
+  describe('in-app notifications', () => {
+    const car = { brand: 'Toyota', brandAr: 'تويوتا', model: 'Corolla', modelAr: null, licensePlate: 'AB-1' };
+
+    const withRelations = (status: string, extra: object = {}) => ({
+      id: 7,
+      userId: 1,
+      status,
+      lateCancellation: false,
+      startDate: new Date('2030-10-12T10:00:00Z'),
+      endDate: new Date('2030-10-14T10:00:00Z'),
+      basePrice: 100,
+      discountPercent: 0,
+      totalPrice: 100,
+      user: { email: 'a@b.com', fullName: 'Sara' },
+      car,
+      ...extra,
+    });
+
+    afterEach(() => jest.useRealTimers());
+
+    beforeEach(() => {
+      reservationsRepository.save.mockImplementation(async (r) => ({ id: 7, ...r }));
+    });
+
+    it('tells the admins about a new booking request', async () => {
+      jest.useFakeTimers({ now: new Date('2030-10-01T00:00:00Z') });
+      carsRepository.findOne.mockResolvedValue({ id: 5, pricePerDay: '50.00', ...car });
+      usersRepository.findOne.mockResolvedValue({ id: 1, fullName: 'Sara', bookingBlocked: false });
+      reservationsRepository.findOne.mockResolvedValue(null);
+      reservationsRepository.count.mockResolvedValue(0);
+      reservationsRepository.create.mockImplementation((data) => data);
+
+      await service.create(dto, currentUser);
+
+      expect(notificationsService.notifyAdmins).toHaveBeenCalledWith(
+        'NEW_RESERVATION',
+        expect.objectContaining({
+          reservationId: 7,
+          customer: 'Sara',
+          car: expect.objectContaining({ brandAr: 'تويوتا' }),
+        }),
+      );
+    });
+
+    it('tells the customer their booking was confirmed', async () => {
+      reservationsRepository.findOne
+        .mockResolvedValueOnce({ id: 7, status: 'PENDING', startDate: new Date('2030-10-12T10:00:00Z') })
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(withRelations('CONFIRMED'));
+
+      await service.confirm(7);
+
+      expect(notificationsService.notify).toHaveBeenCalledWith(
+        1,
+        'RESERVATION_CONFIRMED',
+        expect.objectContaining({ reservationId: 7 }),
+      );
+      expect(notificationsService.notifyAdmins).not.toHaveBeenCalled();
+    });
+
+    it('tells the admins when a customer cancels', async () => {
+      jest.useFakeTimers({ now: new Date('2030-10-01T00:00:00Z') });
+      reservationsRepository.findOne
+        .mockResolvedValueOnce(withRelations('PENDING'))
+        .mockResolvedValueOnce(withRelations('CANCELLED'));
+
+      await service.cancel(7, 1, 'USER');
+
+      expect(notificationsService.notify).toHaveBeenCalledWith(
+        1,
+        'RESERVATION_CANCELLED',
+        expect.objectContaining({ cancelledBy: 'user' }),
+      );
+      expect(notificationsService.notifyAdmins).toHaveBeenCalledWith(
+        'CUSTOMER_CANCELLED',
+        expect.objectContaining({ customer: 'Sara' }),
+      );
+    });
+
+    it('tells the admins when a customer is running late', async () => {
+      jest.useFakeTimers({ now: new Date('2030-10-12T10:30:00Z') });
+      reservationsRepository.findOne
+        .mockResolvedValueOnce(withRelations('CONFIRMED', { runningLate: false }))
+        .mockResolvedValueOnce(withRelations('CONFIRMED', { runningLate: true }));
+
+      await service.markRunningLate(7, 1);
+
+      expect(notificationsService.notifyAdmins).toHaveBeenCalledWith(
+        'CUSTOMER_RUNNING_LATE',
+        expect.objectContaining({ reservationId: 7, customer: 'Sara' }),
+      );
     });
   });
 });

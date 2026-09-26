@@ -10,6 +10,7 @@ import * as bcrypt from 'bcrypt';
 import { User } from './entities/user.entity';
 import { Reservation } from '../reservations/entities/reservation.entity';
 import { EmailService } from '../email/email.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { hashVerificationCode } from '../common/verification/verification-code';
 import { UsersService } from './users.service';
 
@@ -25,6 +26,7 @@ describe('UsersService', () => {
   };
   const reservationsRepository = { count: jest.fn() };
   const emailService = { sendVerificationCode: jest.fn() };
+  const notificationsService = { notify: jest.fn(), notifyAdmins: jest.fn() };
 
   beforeEach(async () => {
     jest.resetAllMocks();
@@ -38,6 +40,7 @@ describe('UsersService', () => {
           useValue: reservationsRepository,
         },
         { provide: EmailService, useValue: emailService },
+        { provide: NotificationsService, useValue: notificationsService },
         { provide: ConfigService, useValue: { get: () => undefined } },
       ],
     }).compile();

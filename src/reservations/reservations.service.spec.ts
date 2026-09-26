@@ -1275,4 +1275,82 @@ describe('ReservationsService', () => {
       );
     });
   });
+  describe('walk-in at the office', () => {
+    const now = new Date('2030-10-12T09:23:41Z');
+
+    afterEach(() => jest.useRealTimers());
+
+    beforeEach(() => {
+      jest.useFakeTimers({ now });
+      usersRepository.findOne.mockResolvedValue({ id: 3, bookingBlocked: false });
+      carsRepository.findOne.mockResolvedValue({ id: 5, status: 'AVAILABLE', pricePerDay: '100.00', pricePerHour: '20.00' });
+      reservationsRepository.create.mockImplementation((data) => data);
+      reservationsRepository.save.mockImplementation(async (data) => ({ id: 40, ...data }));
+    });
+
+    const walkIn = { userId: 3, carId: 5, endDate: '2030-10-12T13:00:00Z' };
+
+    it('books and hands over the car right away, with a code to return it', async () => {
+      // Car free, handover code free
+      reservationsRepository.findOne.mockResolvedValue(null);
+
+      const reservation = await service.walkIn(walkIn, 9);
+
+      expect(reservation).toMatchObject({
+        userId: 3,
+        carId: 5,
+        status: 'PICKED_UP',
+        // Starts now, to the minute
+        startDate: new Date('2030-10-12T09:23:00Z'),
+        pickedUpAt: new Date('2030-10-12T09:23:00Z'),
+        pickedUpById: 9,
+        // 3 hours 37 minutes → 4 hours at 20
+        totalPrice: 80,
+      });
+      expect(reservation.handoverCode).toMatch(/^\d{6}$/);
+      // No notice or active-booking limit at the office
+      expect(reservationsRepository.count).not.toHaveBeenCalled();
+    });
+
+    it('refuses a car that is booked during the period', async () => {
+      reservationsRepository.findOne.mockResolvedValue({ id: 99 });
+
+      await expect(service.walkIn(walkIn, 9)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(reservationsRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('refuses a customer blocked from booking', async () => {
+      usersRepository.findOne.mockResolvedValue({ id: 3, bookingBlocked: true });
+
+      await expect(service.walkIn(walkIn, 9)).rejects.toThrow(
+        'This customer is blocked from booking',
+      );
+    });
+
+    it('needs at least 2 hours, ending on the hour', async () => {
+      reservationsRepository.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.walkInQuote({ carId: 5, endDate: '2030-10-12T11:00:00Z' }),
+      ).rejects.toThrow('A reservation must be at least 2 hours');
+      await expect(
+        service.walkInQuote({ carId: 5, endDate: '2030-10-12T13:30:00Z' }),
+      ).rejects.toThrow('must be on the hour');
+    });
+
+    it('prices the rental and says whether the car is free', async () => {
+      reservationsRepository.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.walkInQuote({ carId: 5, endDate: '2030-10-13T13:00:00Z' }),
+      ).resolves.toMatchObject({
+        available: true,
+        hours: 28,
+        // 1 day + 4 hours at 20
+        totalPrice: 180,
+      });
+    });
+  });
 });

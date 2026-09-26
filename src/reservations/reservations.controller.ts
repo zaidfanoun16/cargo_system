@@ -19,6 +19,7 @@ import { CreateReservationDto } from './dto/create-reservation.dto';
 import { QuoteReservationDto } from './dto/quote-reservation.dto';
 import { UpdateReservationStatusDto } from './dto/update-reservation-status.dto';
 import { HandoverCodeDto } from './dto/handover-code.dto';
+import { WalkInQuoteDto, WalkInReservationDto } from './dto/walk-in.dto';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -147,6 +148,40 @@ export class ReservationsController {
       handoverDto.code,
       currentUser.userId,
     );
+
+  }
+
+
+
+  // ADMIN prices a rental that starts now, at the office
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @Get('walk-in/quote')
+  walkInQuote(@Query() quoteDto: WalkInQuoteDto) {
+
+    return this.reservationsService.walkInQuote(quoteDto);
+
+  }
+
+
+
+  // ADMIN books and hands over a car to a customer at the office
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @Post('walk-in')
+  walkIn(
+    @Body() walkInDto: WalkInReservationDto,
+    @Req() request: Request,
+  ) {
+
+    const currentUser = request.user as {
+      userId: number;
+      email: string;
+      role: string;
+    };
+
+
+    return this.reservationsService.walkIn(walkInDto, currentUser.userId);
 
   }
 

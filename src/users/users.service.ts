@@ -10,11 +10,13 @@ import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
+import { randomBytes } from 'crypto';
 import { Repository } from 'typeorm';
 
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ChangeEmailDto } from './dto/change-email.dto';
+import { CreateWalkInCustomerDto } from './dto/create-walk-in-customer.dto';
 import { EmailService } from '../email/email.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { normalizePhoneNumber } from '../common/phone/phone-number';
@@ -333,6 +335,32 @@ export class UsersService {
     const updatedUser = await this.usersRepository.save(user);
 
     return this.sanitizeUser(updatedUser);
+  }
+
+  // A customer who comes to the office without an account (ADMIN only).
+  // The staff saw their ID, so the email counts as verified; the account
+  // gets a random password, and the customer can set their own with
+  // "forgot password".
+  async createWalkInCustomer(dto: CreateWalkInCustomerDto) {
+    const phoneNumber = normalizePhoneNumber(dto.phoneNumber);
+
+    if (await this.usersRepository.findOne({ where: { email: dto.email } })) {
+      throw new ConflictException('Email is already registered');
+    }
+
+    if (await this.usersRepository.findOne({ where: { phoneNumber } })) {
+      throw new ConflictException('Phone number is already registered');
+    }
+
+    const user = this.usersRepository.create({
+      fullName: dto.fullName,
+      email: dto.email,
+      phoneNumber,
+      isEmailVerified: true,
+      passwordHash: await bcrypt.hash(randomBytes(24).toString('hex'), 10),
+    });
+
+    return this.sanitizeUser(await this.usersRepository.save(user));
   }
 
   // Stop a user from booking, or allow them again (ADMIN only).

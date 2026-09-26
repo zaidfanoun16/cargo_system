@@ -339,8 +339,8 @@ export class UsersService {
 
   // A customer who comes to the office without an account (ADMIN only).
   // The staff saw their ID, so the email counts as verified; the account
-  // gets a random password, and the customer can set their own with
-  // "forgot password".
+  // gets a random password, and a welcome email leads the customer to
+  // "forgot password" to set their own.
   async createWalkInCustomer(dto: CreateWalkInCustomerDto) {
     const phoneNumber = normalizePhoneNumber(dto.phoneNumber);
 
@@ -360,7 +360,19 @@ export class UsersService {
       passwordHash: await bcrypt.hash(randomBytes(24).toString('hex'), 10),
     });
 
-    return this.sanitizeUser(await this.usersRepository.save(user));
+    const savedUser = await this.usersRepository.save(user);
+
+    // Tell the customer they have an account and how to set a password.
+    // The account is already made, so a failed email is only logged.
+    try {
+      await this.emailService.sendWalkInWelcome(savedUser.email, savedUser.fullName);
+    } catch (error) {
+      this.logger.warn(
+        `Could not send the welcome email to user ${savedUser.id}: ${(error as Error).message}`,
+      );
+    }
+
+    return this.sanitizeUser(savedUser);
   }
 
   // Stop a user from booking, or allow them again (ADMIN only).

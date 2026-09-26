@@ -26,7 +26,10 @@ describe('UsersService', () => {
     createQueryBuilder: jest.fn(),
   };
   const reservationsRepository = { count: jest.fn() };
-  const emailService = { sendVerificationCode: jest.fn() };
+  const emailService = {
+    sendVerificationCode: jest.fn(),
+    sendWalkInWelcome: jest.fn(),
+  };
   const notificationsService = { notify: jest.fn(), notifyAdmins: jest.fn() };
 
   beforeEach(async () => {
@@ -125,6 +128,20 @@ describe('UsersService', () => {
       expect(user).not.toHaveProperty('passwordHash');
       const saved = usersRepository.save.mock.calls[0][0];
       expect(saved.passwordHash).toMatch(/^\$2[aby]\$/);
+      // Welcome email with the way to set a password
+      expect(emailService.sendWalkInWelcome).toHaveBeenCalledWith(
+        'walk@in.com',
+        'Walk In',
+      );
+    });
+
+    it('still creates the account when the welcome email fails', async () => {
+      usersRepository.findOne.mockResolvedValue(null);
+      emailService.sendWalkInWelcome.mockRejectedValueOnce(new Error('Resend is down'));
+
+      await expect(service.createWalkInCustomer(dto)).resolves.toMatchObject({
+        id: 20,
+      });
     });
 
     it('refuses an email that already has an account', async () => {

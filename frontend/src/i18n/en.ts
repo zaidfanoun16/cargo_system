@@ -518,7 +518,7 @@ const en: typeof ar = {
     noResults: 'No matching customer. Add them as a new customer.',
     newCustomer: 'New customer',
     addCustomer: 'Add customer',
-    newCustomerNote: 'An account is created so the customer can follow the booking and get the return code. They can set a password later with "Forgot password".',
+    newCustomerNote: 'An account is created so the customer can follow the booking and find the return code, and they get a welcome email with a button to set a password.',
     change: 'Change',
     theCustomer: 'the customer',
     carAndTime: 'Car and period',

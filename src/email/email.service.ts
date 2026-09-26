@@ -120,6 +120,55 @@ export class EmailService {
     );
   }
 
+  // Welcome a customer whose account the staff created at the office, and
+  // let them set a password to use the website
+  async sendWalkInWelcome(to: string, fullName: string) {
+    const link = `${this.frontendUrl}/forgot-password?${new URLSearchParams({ email: to })}`;
+
+    await this.sendEmail(
+      to,
+      'مرحباً بك في CarGo · فعّل حسابك',
+      `
+        <div dir="rtl" style="background: #f5f6f7; padding: 24px 12px; font-family: Tahoma, Arial, sans-serif;">
+          <div style="max-width: 520px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; color: #1f2429;">
+
+            <div style="background: #3f4a54; padding: 20px 24px; color: #ffffff; font-size: 22px; font-weight: bold;">
+              <span dir="ltr">CarGo</span>
+            </div>
+
+            <div style="padding: 24px;">
+              <h2 style="margin: 0 0 8px; font-size: 22px;">أهلاً ${escapeHtml(fullName)} 👋</h2>
+
+              <p style="margin: 0; font-size: 15px; line-height: 1.7; color: #4b545c;">
+                أنشأ فريق CarGo حساباً لك بهذا البريد الإلكتروني عند زيارتك لمكتبنا.
+                عيّن كلمة مرور لحسابك لتتابع حجزك، وتجد رمز إرجاع السيارة، وتحجز أونلاين في المرة القادمة.
+              </p>
+
+              <div style="margin-top: 20px; padding: 16px; background: #f5f6f7; border-radius: 12px; font-size: 14px; line-height: 1.6;">
+                <p style="margin: 0 0 8px; font-weight: bold;">كيف تفعّل حسابك</p>
+                <ol style="margin: 0; padding-right: 20px;">
+                  <li style="margin-bottom: 6px;">اضغط على الزر بالأسفل.</li>
+                  <li style="margin-bottom: 6px;">سيصلك رمز من 6 أرقام على هذا البريد.</li>
+                  <li>أدخل الرمز واختر كلمة المرور التي تريدها.</li>
+                </ol>
+              </div>
+
+              <div style="margin-top: 24px; text-align: center;">
+                <a href="${link}" style="display: inline-block; padding: 12px 24px; background: #3f4a54; color: #ffffff; border-radius: 12px; text-decoration: none; font-weight: bold;">
+                  تعيين كلمة المرور
+                </a>
+              </div>
+            </div>
+
+            <p style="margin: 0; padding: 16px 24px; background: #fafafa; font-size: 12px; color: #8a929a; text-align: center;">
+              إذا لم تزر مكتب CarGo، تجاهل هذه الرسالة.
+            </p>
+          </div>
+        </div>
+      `,
+    );
+  }
+
   // Tell a user their reservation was confirmed, cancelled or completed,
   // with everything they need: car, plate, pickup and return times,
   // duration and price (in shekels), and what happens next

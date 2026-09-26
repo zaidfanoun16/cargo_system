@@ -173,6 +173,22 @@ describe('EmailService', () => {
     });
   });
 
+  it('welcomes a walk-in customer with a link to set a password', async () => {
+    const { service, send } = await createService({
+      RESEND_API_KEY: 'key',
+      FRONTEND_URL: 'https://cargo.test',
+    });
+
+    await service.sendWalkInWelcome('k+1@test.com', '<Khaled>');
+
+    const email = send.mock.calls[0][0] as { subject: string; html: string };
+    expect(email.subject).toContain('مرحباً بك في CarGo');
+    expect(email.html).toContain(
+      'href="https://cargo.test/forgot-password?email=k%2B1%40test.com"',
+    );
+    expect(email.html).toContain('&lt;Khaled&gt;');
+  });
+
   it('formats durations with Arabic plurals', () => {
     const at = (hours: number) =>
       new Date(Date.UTC(2030, 0, 1) + hours * 3_600_000);

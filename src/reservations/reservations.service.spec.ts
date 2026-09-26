@@ -794,7 +794,9 @@ describe('ReservationsService', () => {
       const endDate = new Date('2030-10-14T10:00:00Z');
       reservationsRepository.find.mockResolvedValue([
         { id: 7, status: 'CONFIRMED', handoverCode: '123456', endDate },
+        // Shown again to return the car
         { id: 8, status: 'PICKED_UP', handoverCode: '654321', endDate },
+        { id: 11, status: 'COMPLETED', handoverCode: '333333', endDate },
         // Still running: the customer may arrive late
         { id: 9, status: 'NO_SHOW', handoverCode: '111111', endDate },
         { id: 10, status: 'NO_SHOW', handoverCode: '222222', endDate: new Date('2030-10-12T10:00:00Z') },
@@ -805,7 +807,7 @@ describe('ReservationsService', () => {
         (reservation) => reservation.handoverCode,
       );
 
-      expect(codes).toEqual(['123456', null, '111111', null]);
+      expect(codes).toEqual(['123456', '654321', null, '111111', null]);
     });
 
     it('rejects an unknown code', async () => {
@@ -816,15 +818,81 @@ describe('ReservationsService', () => {
       );
     });
 
-    it('says when the car was already handed over', async () => {
+    it('finds a picked up car by its code, to take it back', async () => {
       reservationsRepository.findOne
         // Not confirmed, not a no-show
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce({ id: 7, status: 'PICKED_UP' });
+        .mockResolvedValueOnce({
+          id: 7,
+          status: 'PICKED_UP',
+          startDate: new Date('2030-10-12T10:00:00Z'),
+          endDate: new Date('2030-10-14T10:00:00Z'),
+        });
+
+      await expect(service.findByHandoverCode('123456')).resolves.toMatchObject({
+        id: 7,
+        mode: 'return',
+      });
+    });
+
+    it('says when the car was already returned', async () => {
+      reservationsRepository.findOne
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: 7, status: 'COMPLETED' });
 
       await expect(service.findByHandoverCode('123456')).rejects.toThrow(
-        'This car was already handed over',
+        'This car was already returned',
+      );
+    });
+
+    it('takes the car back from the customer who shows the code', async () => {
+      const now = new Date('2030-10-13T15:00:00Z');
+      jest.useFakeTimers({ now });
+      const pickedUp = {
+        id: 7,
+        status: 'PICKED_UP',
+        handoverCode: '123456',
+        startDate: new Date('2030-10-12T10:00:00Z'),
+        endDate: new Date('2030-10-14T10:00:00Z'),
+      };
+      reservationsRepository.findOne
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValue(pickedUp);
+
+      await expect(service.returnCar('123456', 9)).resolves.toMatchObject({
+        status: 'COMPLETED',
+        returnedAt: now,
+        returnedById: 9,
+      });
+    });
+
+    it('does not take back a car that was not handed over', async () => {
+      jest.useFakeTimers({ now: new Date('2030-10-12T09:30:00Z') });
+      reservationsRepository.findOne.mockResolvedValue({
+        id: 7,
+        status: 'CONFIRMED',
+        startDate: new Date('2030-10-12T10:00:00Z'),
+        endDate: new Date('2030-10-14T10:00:00Z'),
+      });
+
+      await expect(service.returnCar('123456', 9)).rejects.toThrow(
+        'This car has not been handed over yet',
+      );
+    });
+
+    it('does not print a receipt before the handover', async () => {
+      reservationsRepository.findOne.mockResolvedValue({
+        id: 7,
+        status: 'CONFIRMED',
+        pickedUpAt: null,
+      });
+
+      await expect(service.getReceipt(7)).rejects.toBeInstanceOf(
+        BadRequestException,
       );
     });
 
@@ -840,9 +908,11 @@ describe('ReservationsService', () => {
       };
       reservationsRepository.findOne.mockResolvedValue(reservation);
 
-      await expect(service.handOver('123456')).resolves.toMatchObject({
+      await expect(service.handOver('123456', 9)).resolves.toMatchObject({
         status: 'PICKED_UP',
         pickedUpAt: now,
+        // The staff member, for the receipt
+        pickedUpById: 9,
       });
       expect(reservationsRepository.findOne.mock.calls[0][0].where).toEqual({
         handoverCode: '123456',

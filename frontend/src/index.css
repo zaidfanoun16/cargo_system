@@ -66,3 +66,30 @@
     @apply min-h-dvh bg-bg font-sans text-text antialiased transition-colors;
   }
 }
+
+/* Printed documents (receipts) always use the light colors, even in dark
+   mode, so they look the same on screen and on paper */
+.paper {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-muted: #f3f4f6;
+  --border: #d6dade;
+  --text: #1f2429;
+  --text-muted: #5f676f;
+  --primary: #3f4a54;
+  --primary-hover: #2e363e;
+  --primary-fg: #ffffff;
+  --primary-soft: #e6e9ec;
+  color-scheme: light;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  body {
+    background: #ffffff;
+  }
+}

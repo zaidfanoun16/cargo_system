@@ -102,6 +102,26 @@ export class Reservation {
   returnedAt: Date | null;
 
 
+  // The staff member who handed the car over, and who took it back
+  // (shown on the receipts)
+  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'pickedUpById' })
+  pickedUpBy: User | null;
+
+
+  @Column({ type: 'int', nullable: true })
+  pickedUpById: number | null;
+
+
+  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'returnedById' })
+  returnedBy: User | null;
+
+
+  @Column({ type: 'int', nullable: true })
+  returnedById: number | null;
+
+
   // Reservation belongs to one user
   @ManyToOne(() => User)
   @JoinColumn({ name: 'userId' })

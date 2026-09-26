@@ -395,11 +395,12 @@ export class ReservationsService {
 
     return reservations.map((reservation) => ({
       ...reservation,
-      // Only needed, and only shown, until the car is handed over. A
+      // Shown at pickup and again at return, then no longer needed. A
       // customer who arrives after a no-show can still show it until the
       // reservation ends.
       handoverCode:
         reservation.status === ReservationStatus.CONFIRMED ||
+        reservation.status === ReservationStatus.PICKED_UP ||
         (reservation.status === ReservationStatus.NO_SHOW &&
           reservation.endDate > now)
           ? reservation.handoverCode
@@ -769,7 +770,7 @@ export class ReservationsService {
   // before pickup until the end of the reservation. A customer who
   // arrives after the reservation became NO_SHOW can still get the car
   // if nobody else booked it since; the no-show then no longer counts.
-  async pickUp(id: number) {
+  async pickUp(id: number, staffId: number | null = null) {
 
     const reservation = await this.findReservation(id);
 
@@ -815,6 +816,7 @@ export class ReservationsService {
 
     reservation.status = ReservationStatus.PICKED_UP;
     reservation.pickedUpAt = now;
+    reservation.pickedUpById = staffId;
 
 
     const savedReservation =
@@ -877,9 +879,10 @@ export class ReservationsService {
 
   // ADMIN: Find the reservation of a handover code (scanned from the
   // customer's QR code or typed), to check the customer and the car
-  // before handing it over. A customer who arrives after their
-  // reservation became NO_SHOW is found too, until it ends, so the staff
-  // can still hand the car over if it is free.
+  // before handing it over, or when it comes back (mode "return"). A
+  // customer who arrives after their reservation became NO_SHOW is found
+  // too, until it ends, so the staff can still hand the car over if it
+  // is free.
   async findByHandoverCode(code: string) {
 
     const load = (where: FindOptionsWhere<Reservation>) =>
@@ -904,6 +907,7 @@ export class ReservationsService {
           status: true,
           totalPrice: true,
           runningLate: true,
+          pickedUpAt: true,
           userId: true,
           carId: true,
 
@@ -946,22 +950,23 @@ export class ReservationsService {
       (await load({
         status: ReservationStatus.NO_SHOW,
         endDate: MoreThan(now),
-      }));
+      })) ??
+      (await load({ status: ReservationStatus.PICKED_UP }));
 
 
     if (!reservation) {
 
-      // Scanned twice: say so instead of "invalid"
-      const handedOver = await this.reservationsRepository.findOne({
+      // Scanned again after the return: say so instead of "invalid"
+      const returned = await this.reservationsRepository.findOne({
         where: {
           handoverCode: code,
-          status: ReservationStatus.PICKED_UP,
+          status: ReservationStatus.COMPLETED,
         },
       });
 
-      if (handedOver) {
+      if (returned) {
         throw new BadRequestException(
-          'This car was already handed over',
+          'This car was already returned',
         );
       }
 
@@ -977,6 +982,11 @@ export class ReservationsService {
 
     return {
       ...reservation,
+      // Hand the car over, or take it back
+      mode:
+        reservation.status === ReservationStatus.PICKED_UP
+          ? ('return' as const)
+          : ('pickup' as const),
       // From when the car can be handed over (see pickUp)
       handoverFrom: new Date(
         reservation.startDate.getTime() - EARLY_PICKUP_HOURS * HOUR_IN_MS,
@@ -994,11 +1004,121 @@ export class ReservationsService {
 
 
   // ADMIN: Hand the car over to the customer who showed this code
-  async handOver(code: string) {
+  async handOver(code: string, staffId: number) {
 
     const reservation = await this.findByHandoverCode(code);
 
-    return this.pickUp(reservation.id);
+    if (reservation.mode !== 'pickup') {
+      throw new BadRequestException(
+        'This car was already handed over',
+      );
+    }
+
+    return this.pickUp(reservation.id, staffId);
+
+  }
+
+
+
+  // ADMIN: Take the car back from the customer who showed this code
+  async returnCar(code: string, staffId: number) {
+
+    const reservation = await this.findByHandoverCode(code);
+
+    if (reservation.mode !== 'return') {
+      throw new BadRequestException(
+        'This car has not been handed over yet',
+      );
+    }
+
+    return this.complete(reservation.id, staffId);
+
+  }
+
+
+
+  // ADMIN: Everything printed on the handover and return receipts
+  async getReceipt(id: number) {
+
+    const reservation =
+      await this.reservationsRepository.findOne({
+
+        where: {
+          id,
+        },
+
+        relations: {
+          user: true,
+          car: {
+            category: true,
+          },
+          pickedUpBy: true,
+          returnedBy: true,
+        },
+
+        select: {
+          id: true,
+          startDate: true,
+          endDate: true,
+          status: true,
+          basePrice: true,
+          discountPercent: true,
+          totalPrice: true,
+          pickedUpAt: true,
+          returnedAt: true,
+          createdAt: true,
+
+          user: {
+            id: true,
+            fullName: true,
+            email: true,
+            phoneNumber: true,
+          },
+
+          car: {
+            id: true,
+            brand: true,
+            brandAr: true,
+            model: true,
+            modelAr: true,
+            year: true,
+            color: true,
+            colorAr: true,
+            licensePlate: true,
+            category: {
+              id: true,
+              name: true,
+              nameAr: true,
+            },
+          },
+
+          pickedUpBy: {
+            id: true,
+            fullName: true,
+          },
+
+          returnedBy: {
+            id: true,
+            fullName: true,
+          },
+        },
+
+      });
+
+
+    if (!reservation) {
+      throw new NotFoundException(
+        'Reservation not found',
+      );
+    }
+
+    if (!reservation.pickedUpAt) {
+      throw new BadRequestException(
+        'The car has not been handed over yet',
+      );
+    }
+
+    return reservation;
 
   }
 
@@ -1012,13 +1132,16 @@ export class ReservationsService {
 
       const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
 
-      // A no-show can still be handed over until it ends, so its code
-      // stays taken until then
+      // The code is used again at return, and a no-show can still be
+      // handed over until it ends, so the code stays taken until then
       const taken = await this.reservationsRepository.findOne({
         where: [
           {
             handoverCode: code,
-            status: ReservationStatus.CONFIRMED,
+            status: In([
+              ReservationStatus.CONFIRMED,
+              ReservationStatus.PICKED_UP,
+            ]),
           },
           {
             handoverCode: code,
@@ -1043,7 +1166,7 @@ export class ReservationsService {
 
 
   // ADMIN: The customer returned the car. It can come back early.
-  async complete(id: number) {
+  async complete(id: number, staffId: number | null = null) {
 
     const reservation = await this.findReservation(id);
 
@@ -1057,6 +1180,7 @@ export class ReservationsService {
 
     reservation.status = ReservationStatus.COMPLETED;
     reservation.returnedAt = new Date();
+    reservation.returnedById = staffId;
 
 
     const savedReservation =
@@ -1170,6 +1294,7 @@ export class ReservationsService {
   async updateStatus(
     id: number,
     updateStatusDto: UpdateReservationStatusDto,
+    staffId: number | null = null,
   ) {
 
     switch (updateStatusDto.status) {
@@ -1178,10 +1303,10 @@ export class ReservationsService {
         return this.confirm(id);
 
       case ReservationStatus.PICKED_UP:
-        return this.pickUp(id);
+        return this.pickUp(id, staffId);
 
       case ReservationStatus.COMPLETED:
-        return this.complete(id);
+        return this.complete(id, staffId);
 
       case ReservationStatus.CANCELLED:
         return this.cancelReservation(

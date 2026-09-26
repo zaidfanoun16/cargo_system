@@ -42,6 +42,8 @@ const knownErrors: Record<string, string> = {
   'It is too early to hand over this car': 'admin.errors.tooEarly',
   'Invalid handover code': 'handover.errors.invalid',
   'This car was already handed over': 'handover.errors.already',
+  'This car was already returned': 'handover.errors.alreadyReturned',
+  'This car has not been handed over yet': 'handover.errors.notHandedOver',
   'You already said you are running late': 'bookings.errors.alreadyLate',
   'The pickup time has already passed': 'bookings.errors.pickupPassed',
   'Only CONFIRMED reservations can be marked as running late': 'bookings.errors.pickupPassed',

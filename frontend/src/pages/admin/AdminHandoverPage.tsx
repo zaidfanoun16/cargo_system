@@ -1,7 +1,8 @@
-import { Camera, CameraOff, CircleCheck, KeyRound, MessageCircle, RotateCcw, Search } from 'lucide-react'
+import { Camera, CameraOff, CircleCheck, KeyRound, MessageCircle, Printer, RotateCcw, Search, Undo2 } from 'lucide-react'
 import QrScanner from 'qr-scanner'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router-dom'
 
 import { CarPhoto } from '../../components/cars/CarPhoto'
 import { FormAlert } from '../../components/form/FormAlert'
@@ -17,8 +18,11 @@ import { AdminHeader } from './AdminLayout'
 
 type Handover = {
   id: number
+  // Hand the car over, or take it back
+  mode: 'pickup' | 'return'
   // NO_SHOW: the customer arrived after the pickup time had passed
-  status: 'CONFIRMED' | 'NO_SHOW'
+  status: 'CONFIRMED' | 'NO_SHOW' | 'PICKED_UP'
+  pickedUpAt: string | null
   startDate: string
   endDate: string
   totalPrice: number
@@ -40,8 +44,10 @@ function codeFrom(text: string) {
   return text.match(/\b\d{6}\b/)?.[0] ?? null
 }
 
-// Hand a car over at pickup: scan the QR code on the customer's phone
-// (or type the code), check the customer and the car, then confirm.
+// Hand a car over at pickup, or take it back at return: scan the QR code
+// on the customer's phone (or type the code), check the customer and the
+// car, then confirm and print the receipt. The same code is used for both;
+// a car the customer already has is being returned.
 export function AdminHandoverPage() {
   const { t, i18n } = useTranslation()
   const language = i18n.language
@@ -61,7 +67,7 @@ export function AdminHandoverPage() {
   const [loading, setLoading] = useState(false)
   const [checkedId, setCheckedId] = useState(false)
   const [checkedLicense, setCheckedLicense] = useState(false)
-  const [handedOver, setHandedOver] = useState<Handover>()
+  const [done, setDone] = useState<Handover>()
 
   // Turn the camera off when leaving the page
   useEffect(() => () => scanner.current?.destroy(), [])
@@ -123,14 +129,15 @@ export function AdminHandoverPage() {
     void lookUp(value)
   }
 
-  async function handOver() {
+  async function submit() {
     if (!code || !handover) return
     setLoading(true)
     setError(undefined)
     try {
-      await api('/reservations/handover', { method: 'POST', auth: true, body: { code } })
-      toast.success(t('handover.admin.doneToast', { id: formatNumber(handover.id, language) }))
-      setHandedOver(handover)
+      const path = handover.mode === 'return' ? '/reservations/return' : '/reservations/handover'
+      await api(path, { method: 'POST', auth: true, body: { code } })
+      toast.success(t(`handover.admin.${handover.mode}.toast`, { id: formatNumber(handover.id, language) }))
+      setDone(handover)
       setHandover(undefined)
     } catch (caught) {
       setError(errorKey(caught))
@@ -140,7 +147,7 @@ export function AdminHandoverPage() {
   }
 
   function reset() {
-    setHandedOver(undefined)
+    setDone(undefined)
     setHandover(undefined)
     setCode(undefined)
     setTyped('')
@@ -148,23 +155,35 @@ export function AdminHandoverPage() {
   }
 
   const dateTime = (value: string) => formatDate(value, language, { weekday: 'short', hour: 'numeric', minute: '2-digit' })
-  const tooEarly = handover ? new Date(handover.handoverFrom).getTime() > loadedAt : false
+  const isReturn = handover?.mode === 'return'
+  const tooEarly = handover && !isReturn ? new Date(handover.handoverFrom).getTime() > loadedAt : false
+  // Hours past the return time (0 when on time)
+  const lateHours =
+    handover && isReturn ? Math.max(0, Math.ceil((loadedAt - new Date(handover.endDate).getTime()) / (60 * 60 * 1000))) : 0
 
-  if (handedOver) {
+  if (done) {
     return (
       <>
         <AdminHeader title={t('admin.nav.handover')} />
         <div className="mx-auto max-w-md rounded-3xl border border-border bg-surface p-6 text-center" role="status">
           <CircleCheck className="mx-auto size-16 text-emerald-600 dark:text-emerald-400" aria-hidden />
-          <h2 className="mt-4 text-xl font-extrabold">{t('handover.admin.doneTitle')}</h2>
+          <h2 className="mt-4 text-xl font-extrabold">{t(`handover.admin.${done.mode}.doneTitle`)}</h2>
           <p className="mt-2 text-sm text-muted">
-            {t('handover.admin.doneText', {
-              name: handedOver.user.fullName,
-              car: carName(handedOver.car, language),
-              date: dateTime(handedOver.endDate),
+            {t(`handover.admin.${done.mode}.doneText`, {
+              name: done.user.fullName,
+              car: carName(done.car, language),
+              date: dateTime(done.endDate),
             })}
           </p>
-          <Button className="mt-6 h-11 w-full" onClick={reset}>
+          <Link
+            to={`/receipt/${done.id}?type=${done.mode}`}
+            target="_blank"
+            className="mt-6 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-fg hover:bg-primary-hover"
+          >
+            <Printer className="size-4" aria-hidden />
+            {t(`handover.admin.${done.mode}.print`)}
+          </Link>
+          <Button variant="secondary" className="mt-2 h-11 w-full" onClick={reset}>
             <RotateCcw className="size-4" aria-hidden />
             {t('handover.admin.next')}
           </Button>
@@ -255,7 +274,17 @@ export function AdminHandoverPage() {
               />
               <div className="space-y-4 p-5">
                 <div>
-                  <p className="text-xs font-semibold text-muted">
+                  <p className="flex flex-wrap items-center gap-2 text-xs font-semibold text-muted">
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 font-bold ${
+                        isReturn
+                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                          : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                      }`}
+                    >
+                      {isReturn ? <Undo2 className="size-3.5" aria-hidden /> : <KeyRound className="size-3.5" aria-hidden />}
+                      {t(`handover.admin.${handover.mode}.badge`)}
+                    </span>
                     {t('bookings.number', { id: formatNumber(handover.id, language) })}
                   </p>
                   <h2 className="text-xl font-extrabold">
@@ -297,7 +326,29 @@ export function AdminHandoverPage() {
                     <dt className="text-xs font-semibold text-muted">{t('booking.return')}</dt>
                     <dd className="mt-0.5 font-semibold">{dateTime(handover.endDate)}</dd>
                   </div>
+                  {isReturn && handover.pickedUpAt && (
+                    <div>
+                      <dt className="text-xs font-semibold text-muted">{t('handover.admin.return.pickedUpAt')}</dt>
+                      <dd className="mt-0.5 font-semibold">{dateTime(handover.pickedUpAt)}</dd>
+                    </div>
+                  )}
                 </dl>
+
+                {isReturn && (
+                  <p
+                    className={`rounded-2xl p-3 text-sm font-semibold ${
+                      lateHours > 0
+                        ? 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200'
+                        : 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
+                    }`}
+                  >
+                    {lateHours > 0
+                      ? t('handover.admin.return.late', {
+                          duration: t('booking.hours', { count: lateHours, formatted: formatNumber(lateHours, language) }),
+                        })
+                      : t('handover.admin.return.onTime')}
+                  </p>
+                )}
 
                 {tooEarly && (
                   <FormAlert type="error">{t('handover.admin.tooEarly', { date: dateTime(handover.handoverFrom) })}</FormAlert>
@@ -317,9 +368,17 @@ export function AdminHandoverPage() {
                   ))}
 
                 <fieldset className="space-y-2 border-t border-border pt-4">
-                  <legend className="sr-only">{t('handover.admin.checks')}</legend>
-                  <Check checked={checkedId} onChange={setCheckedId} label={t('handover.admin.checkId', { name: handover.user.fullName })} />
-                  <Check checked={checkedLicense} onChange={setCheckedLicense} label={t('handover.admin.checkLicense')} />
+                  <legend className="sr-only">{t(`handover.admin.${handover.mode}.checks`)}</legend>
+                  <Check
+                    checked={checkedId}
+                    onChange={setCheckedId}
+                    label={t(isReturn ? 'handover.admin.return.checkCondition' : 'handover.admin.checkId', { name: handover.user.fullName })}
+                  />
+                  <Check
+                    checked={checkedLicense}
+                    onChange={setCheckedLicense}
+                    label={t(isReturn ? 'handover.admin.return.checkFuel' : 'handover.admin.checkLicense')}
+                  />
                 </fieldset>
 
                 <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -329,12 +388,18 @@ export function AdminHandoverPage() {
                   <Button
                     className="h-11"
                     disabled={!checkedId || !checkedLicense || tooEarly || handover.carTaken || loading}
-                    onClick={handOver}
+                    onClick={submit}
                   >
-                    <KeyRound className="size-4" aria-hidden />
+                    {isReturn ? <Undo2 className="size-4" aria-hidden /> : <KeyRound className="size-4" aria-hidden />}
                     {loading
                       ? t('auth.loading')
-                      : t(handover.status === 'NO_SHOW' ? 'handover.admin.confirmLate' : 'handover.admin.confirm')}
+                      : t(
+                          isReturn
+                            ? 'handover.admin.return.confirm'
+                            : handover.status === 'NO_SHOW'
+                              ? 'handover.admin.confirmLate'
+                              : 'handover.admin.confirm',
+                        )}
                   </Button>
                 </div>
               </div>

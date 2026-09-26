@@ -12,6 +12,7 @@ import { randomInt } from 'crypto';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
+  Between,
   FindOptionsWhere,
   In,
   IsNull,
@@ -29,6 +30,9 @@ import { UpdateReservationStatusDto } from './dto/update-reservation-status.dto'
 import {
   ACTIVE_STATUSES,
   EARLY_PICKUP_HOURS,
+  MAX_ACTIVE_RESERVATIONS,
+  MIN_LEAD_HOURS,
+  REMINDER_HOURS,
   MAX_LATE_CANCELLATIONS,
   MAX_NO_SHOWS,
   NO_SHOW_GRACE_HOURS,
@@ -117,6 +121,26 @@ export class ReservationsService {
       throw new ForbiddenException(
         'Your account cannot make new reservations. Please contact us',
       );
+    }
+
+
+    // So one person cannot hold many cars "just in case". Staff booking
+    // for customers are not limited.
+    if (currentUser.role !== 'ADMIN') {
+
+      const activeReservations = await this.reservationsRepository.count({
+        where: {
+          userId: currentUser.userId,
+          status: In(ACTIVE_STATUSES),
+        },
+      });
+
+      if (activeReservations >= MAX_ACTIVE_RESERVATIONS) {
+        throw new BadRequestException(
+          `You can have at most ${MAX_ACTIVE_RESERVATIONS} active reservations`,
+        );
+      }
+
     }
 
 
@@ -314,6 +338,14 @@ export class ReservationsService {
     if (startDate < now || endDate < now) {
       throw new BadRequestException(
         'Reservation dates cannot be in the past',
+      );
+    }
+
+
+    // The staff need time to confirm the reservation and prepare the car
+    if (startDate.getTime() - now.getTime() < MIN_LEAD_HOURS * hourInMs) {
+      throw new BadRequestException(
+        `A reservation must start at least ${MIN_LEAD_HOURS} hours from now`,
       );
     }
 
@@ -758,6 +790,14 @@ export class ReservationsService {
       ReservationStatus.CONFIRMED;
 
     reservation.handoverCode = await this.generateHandoverCode();
+
+    // The confirmation email already has everything a reminder would
+    if (
+      reservation.startDate.getTime() - Date.now() <=
+      REMINDER_HOURS * HOUR_IN_MS
+    ) {
+      reservation.reminderSentAt = new Date();
+    }
 
 
     const savedReservation =
@@ -1622,6 +1662,52 @@ export class ReservationsService {
 
 
 
+  // Every 10 minutes, remind customers REMINDER_HOURS before pickup, by
+  // email with the pickup code. Each reservation is reminded once.
+  @Cron(CronExpression.EVERY_10_MINUTES)
+  async sendPickupReminders() {
+
+    const now = new Date();
+
+    const upcoming =
+      await this.reservationsRepository.find({
+
+        where: {
+          status: ReservationStatus.CONFIRMED,
+          reminderSentAt: IsNull(),
+          startDate: Between(
+            now,
+            new Date(now.getTime() + REMINDER_HOURS * HOUR_IN_MS),
+          ),
+        },
+
+      });
+
+
+    for (const reservation of upcoming) {
+
+      reservation.reminderSentAt = now;
+
+      await this.reservationsRepository.save(reservation);
+
+      await this.notifyStatusChange(reservation.id, undefined, 'REMINDER');
+
+    }
+
+
+    if (upcoming.length > 0) {
+      this.logger.log(
+        `Sent ${upcoming.length} pickup reminder(s)`,
+      );
+    }
+
+
+    return upcoming.length;
+
+  }
+
+
+
   // Every 10 minutes, mark CONFIRMED reservations whose car was not
   // picked up NO_SHOW_GRACE_HOURS after pickup time. The car becomes free
   // again and the no-show counts against the customer.
@@ -1746,12 +1832,14 @@ export class ReservationsService {
 
 
   // Email the user when their reservation is confirmed, picked up,
-  // cancelled, completed or missed. A failed email must not undo the status change, so errors
-  // are only logged.
+  // cancelled, completed or missed, or to remind them before pickup
+  // (kind "REMINDER"). A failed email must not undo the status change, so
+  // errors are only logged.
   // cancelledBy: who cancelled, so the email can say it (see EmailService)
   private async notifyStatusChange(
     reservationId: number,
     cancelledBy?: 'user' | 'admin' | 'system',
+    kind?: 'REMINDER',
   ) {
 
     try {
@@ -1787,7 +1875,7 @@ export class ReservationsService {
         {
           fullName: reservation.user.fullName,
           reservationId: reservation.id,
-          status: reservation.status,
+          status: kind ?? reservation.status,
           car: `${car.brandAr || car.brand} ${car.modelAr || car.model}`,
           licensePlate: car.licensePlate,
           startDate: reservation.startDate,

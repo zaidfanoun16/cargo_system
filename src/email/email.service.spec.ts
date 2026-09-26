@@ -149,6 +149,14 @@ describe('EmailService', () => {
       expect(email.html).toContain('احتُسب إلغاءً متأخراً');
     });
 
+    it('has a reminder with the pickup code', async () => {
+      const email = await sentEmail({ status: 'REMINDER', handoverCode: '042917' });
+
+      expect(email.subject).toBe('CarGo · حجز رقم 15: تذكير بموعد الاستلام');
+      expect(email.html).toContain('042917');
+      expect(email.html).toContain('سأتأخر');
+    });
+
     it('has an email for pickup and for a no-show', async () => {
       expect((await sentEmail({ status: 'PICKED_UP' })).subject).toBe(
         'CarGo · حجز رقم 15: تم الاستلام',

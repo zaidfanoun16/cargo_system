@@ -98,6 +98,12 @@ export class Reservation {
   runningLate: boolean;
 
 
+  // When the reminder email was sent (or would not be needed, because the
+  // reservation was confirmed less than REMINDER_HOURS before pickup)
+  @Column({ type: 'timestamp', nullable: true })
+  reminderSentAt: Date | null;
+
+
   @Column({ type: 'timestamp', nullable: true })
   returnedAt: Date | null;
 

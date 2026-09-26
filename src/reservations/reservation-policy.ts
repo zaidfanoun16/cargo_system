@@ -32,6 +32,19 @@ export const MAX_NO_SHOWS = 2;
 export const STRIKE_WINDOW_DAYS = 90;
 
 
+// A customer can have at most this many active (pending, confirmed or
+// picked up) reservations at the same time
+export const MAX_ACTIVE_RESERVATIONS = 2;
+
+// A reservation must start at least this many hours from now, so the
+// staff have time to confirm it and prepare the car
+export const MIN_LEAD_HOURS = 2;
+
+// The reminder email (with the pickup code) is sent this many hours
+// before pickup
+export const REMINDER_HOURS = 24;
+
+
 // Reservations that hold the car, so nobody else can book it
 export const ACTIVE_STATUSES = [
   ReservationStatus.PENDING,
@@ -97,5 +110,7 @@ export const POLICY = {
   runningLateExtraHours: RUNNING_LATE_EXTRA_HOURS,
   maxLateCancellations: MAX_LATE_CANCELLATIONS,
   maxNoShows: MAX_NO_SHOWS,
+  maxActiveReservations: MAX_ACTIVE_RESERVATIONS,
+  minLeadHours: MIN_LEAD_HOURS,
   strikeWindowDays: STRIKE_WINDOW_DAYS,
 };

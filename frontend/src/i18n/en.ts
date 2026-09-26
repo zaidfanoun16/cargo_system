@@ -160,6 +160,7 @@ const en: typeof ar = {
     pastDates: 'The pickup time must be in the future',
     endBeforeStart: 'The return time must be after the pickup time',
     minHours: 'The shortest booking is {{count}} hours',
+    minLead: 'A booking must start at least 2 hours from now, so our team can confirm it and prepare the car',
     onTheHour: 'Choose a time on the hour',
     required: 'This field is required',
     invalidEmail: 'Enter a valid email address',
@@ -277,6 +278,7 @@ const en: typeof ar = {
       withinHours_other: '{{formatted}} hours',
     acceptPolicy: 'I have read and accept the cancellation and no-show policy',
     blocked: 'Your account can no longer make bookings because of repeated late cancellations or no-shows. Contact us to have it re-enabled.',
+    tooManyActive: 'You already have 2 active bookings, the most allowed. Cancel one or wait until it ends to book again.',
     unavailable: {
       reserved: 'The car is booked during part of this period. Pick another time or check the calendar.',
       maintenance: 'The car is under maintenance and cannot be booked right now.',

@@ -14,13 +14,14 @@ const CHECK_EVERY_MS = 4000
 type Props = {
   booking: Booking | null
   onClose: () => void
-  // The staff scanned the code and handed the car over
+  // The staff scanned the code and handed the car over, or took it back
   onHandedOver: () => void
 }
 
-// The code the customer shows at pickup, as a QR code and as digits.
-// While it is open it checks for the handover, so the customer sees
-// "handed over" as soon as the staff confirm it.
+// The code the customer shows at pickup, and again when returning the
+// car, as a QR code and as digits. While it is open it checks the
+// booking, so the customer sees "handed over" (or "returned") as soon as
+// the staff confirm it.
 export function HandoverDialog({ booking, onClose, onHandedOver }: Props) {
   const { t, i18n } = useTranslation()
   const language = i18n.language
@@ -28,6 +29,9 @@ export function HandoverDialog({ booking, onClose, onHandedOver }: Props) {
   const [handedOver, setHandedOver] = useState(false)
 
   const open = booking !== null
+  // A car the customer has is being returned
+  const mode = booking?.status === 'PICKED_UP' ? 'return' : 'pickup'
+  const doneStatus = mode === 'return' ? 'COMPLETED' : 'PICKED_UP'
 
   useEffect(() => {
     if (open && !dialog.current?.open) dialog.current?.showModal()
@@ -39,7 +43,7 @@ export function HandoverDialog({ booking, onClose, onHandedOver }: Props) {
     const timer = setInterval(async () => {
       try {
         const bookings = await api<Booking[]>('/reservations/my', { auth: true })
-        if (bookings.find((item) => item.id === booking.id)?.status === 'PICKED_UP') {
+        if (bookings.find((item) => item.id === booking.id)?.status === doneStatus) {
           setHandedOver(true)
           onHandedOver()
         }
@@ -48,7 +52,7 @@ export function HandoverDialog({ booking, onClose, onHandedOver }: Props) {
       }
     }, CHECK_EVERY_MS)
     return () => clearInterval(timer)
-  }, [booking, handedOver, onHandedOver])
+  }, [booking, handedOver, onHandedOver, doneStatus])
 
   function close() {
     setHandedOver(false)
@@ -73,18 +77,22 @@ export function HandoverDialog({ booking, onClose, onHandedOver }: Props) {
       {booking && (
         <div className="rounded-3xl border border-border bg-surface p-6 text-center">
           <h2 id="handover-title" className="text-xl font-extrabold">
-            {t('handover.title')}
+            {t(`handover.${mode}.title`)}
           </h2>
           <p className="mt-1 text-sm text-muted">
             {carName(booking.car, language)} ·{' '}
-            {formatDate(booking.startDate, language, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}
+            {formatDate(mode === 'return' ? booking.endDate : booking.startDate, language, {
+              weekday: 'short',
+              hour: 'numeric',
+              minute: '2-digit',
+            })}
           </p>
 
           {handedOver ? (
             <div className="py-8" role="status">
               <CircleCheck className="mx-auto size-16 text-emerald-600 dark:text-emerald-400" aria-hidden />
-              <p className="mt-4 text-lg font-extrabold">{t('handover.done')}</p>
-              <p className="mt-1 text-sm text-muted">{t('handover.doneText')}</p>
+              <p className="mt-4 text-lg font-extrabold">{t(`handover.${mode}.done`)}</p>
+              <p className="mt-1 text-sm text-muted">{t(`handover.${mode}.doneText`)}</p>
             </div>
           ) : (
             <>
@@ -98,7 +106,7 @@ export function HandoverDialog({ booking, onClose, onHandedOver }: Props) {
               </p>
               <p className="mt-4 flex items-start gap-2 rounded-2xl bg-surface-muted p-3 text-start text-sm text-muted">
                 <IdCard className="mt-0.5 size-5 shrink-0" aria-hidden />
-                {t('handover.instructions')}
+                {t(`handover.${mode}.instructions`)}
               </p>
             </>
           )}

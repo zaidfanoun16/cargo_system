@@ -1,4 +1,4 @@
-import { Ban, CalendarX2, Check, CheckCheck, MessageCircle, ScanLine, Search, X } from 'lucide-react'
+import { Ban, CalendarX2, Check, MessageCircle, Printer, ScanLine, Search, Undo2, X } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router-dom'
@@ -20,7 +20,7 @@ import { AdminHeader } from './AdminLayout'
 
 const FILTERS: (BookingStatus | 'ALL')[] = ['PENDING', 'CONFIRMED', 'PICKED_UP', 'COMPLETED', 'NO_SHOW', 'CANCELLED', 'ALL']
 
-type Action = 'confirm' | 'pickup' | 'complete' | 'cancel'
+type Action = 'confirm' | 'pickup' | 'return' | 'receipt' | 'cancel'
 
 export function AdminBookingsPage() {
   const { t, i18n } = useTranslation()
@@ -57,7 +57,7 @@ export function AdminBookingsPage() {
 
   const dateTime = (value: string) => formatDate(value, language, { weekday: 'short', hour: 'numeric', minute: '2-digit' })
 
-  async function run(booking: AdminBooking, action: Action) {
+  async function run(booking: AdminBooking, action: 'confirm' | 'cancel') {
     const car = carName(booking.car, language)
     const confirmed = await confirm({
       title: t(`admin.bookings.${action}Title`, { id: formatNumber(booking.id, language) }),
@@ -145,7 +145,9 @@ export function AdminBookingsPage() {
               // Handed over by scanning the customer's code (from an hour
               // before pickup), even after a no-show while the car is free
               if ((booking.status === 'CONFIRMED' || booking.status === 'NO_SHOW') && !ended) actions.push('pickup')
-              if (booking.status === 'PICKED_UP') actions.push('complete')
+              // Taken back by scanning the same code
+              if (booking.status === 'PICKED_UP') actions.push('return')
+              if (booking.pickedUpAt) actions.push('receipt')
               if ((booking.status === 'PENDING' || booking.status === 'CONFIRMED') && !started) actions.push('cancel')
 
               return (
@@ -240,11 +242,24 @@ export function AdminBookingsPage() {
                           {t('admin.bookings.pickup')}
                         </Link>
                       )}
-                      {actions.includes('complete') && (
-                        <Button className="h-10" disabled={busy === booking.id} onClick={() => run(booking, 'complete')}>
-                          <CheckCheck className="size-4" aria-hidden />
-                          {t('admin.bookings.complete')}
-                        </Button>
+                      {actions.includes('return') && (
+                        <Link
+                          to="/admin/handover"
+                          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-fg hover:bg-primary-hover"
+                        >
+                          <Undo2 className="size-4" aria-hidden />
+                          {t('admin.bookings.returnWithCode')}
+                        </Link>
+                      )}
+                      {actions.includes('receipt') && (
+                        <Link
+                          to={`/receipt/${booking.id}?type=${booking.status === 'COMPLETED' ? 'return' : 'pickup'}`}
+                          target="_blank"
+                          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border bg-surface px-4 text-sm font-semibold hover:bg-surface-muted"
+                        >
+                          <Printer className="size-4" aria-hidden />
+                          {t('admin.bookings.receipt')}
+                        </Link>
                       )}
                       {actions.includes('cancel') && (
                         <Button

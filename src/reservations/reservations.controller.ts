@@ -108,9 +108,45 @@ export class ReservationsController {
   @Post('handover')
   handOver(
     @Body() handoverDto: HandoverCodeDto,
+    @Req() request: Request,
   ) {
 
-    return this.reservationsService.handOver(handoverDto.code);
+    const currentUser = request.user as {
+      userId: number;
+      email: string;
+      role: string;
+    };
+
+
+    return this.reservationsService.handOver(
+      handoverDto.code,
+      currentUser.userId,
+    );
+
+  }
+
+
+
+  // ADMIN takes the car back from the customer who showed the code
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @Post('return')
+  returnCar(
+    @Body() handoverDto: HandoverCodeDto,
+    @Req() request: Request,
+  ) {
+
+    const currentUser = request.user as {
+      userId: number;
+      email: string;
+      role: string;
+    };
+
+
+    return this.reservationsService.returnCar(
+      handoverDto.code,
+      currentUser.userId,
+    );
 
   }
 
@@ -189,9 +225,31 @@ export class ReservationsController {
   @Patch(':id/pickup')
   pickUp(
     @Param('id', ParseIntPipe) id: number,
+    @Req() request: Request,
   ) {
 
-    return this.reservationsService.pickUp(id);
+    const currentUser = request.user as {
+      userId: number;
+      email: string;
+      role: string;
+    };
+
+
+    return this.reservationsService.pickUp(id, currentUser.userId);
+
+  }
+
+
+
+  // ADMIN prints the handover or return receipt
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @Get(':id/receipt')
+  getReceipt(
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+
+    return this.reservationsService.getReceipt(id);
 
   }
 
@@ -203,9 +261,17 @@ export class ReservationsController {
   @Patch(':id/complete')
   complete(
     @Param('id', ParseIntPipe) id: number,
+    @Req() request: Request,
   ) {
 
-    return this.reservationsService.complete(id);
+    const currentUser = request.user as {
+      userId: number;
+      email: string;
+      role: string;
+    };
+
+
+    return this.reservationsService.complete(id, currentUser.userId);
 
   }
 
@@ -267,11 +333,20 @@ export class ReservationsController {
   updateStatus(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateStatusDto: UpdateReservationStatusDto,
+    @Req() request: Request,
   ) {
+
+    const currentUser = request.user as {
+      userId: number;
+      email: string;
+      role: string;
+    };
+
 
     return this.reservationsService.updateStatus(
       id,
       updateStatusDto,
+      currentUser.userId,
     );
 
   }

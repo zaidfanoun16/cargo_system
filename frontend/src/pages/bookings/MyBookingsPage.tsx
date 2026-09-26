@@ -307,7 +307,7 @@ export function MyBookingsPage() {
                         {hasCode && (
                           <Button className="h-10" onClick={() => setShowingCode(booking)}>
                             <QrCode className="size-4" aria-hidden />
-                            {t('handover.show')}
+                            {t(booking.status === 'PICKED_UP' ? 'handover.return.show' : 'handover.pickup.show')}
                           </Button>
                         )}
                         {canSayLate && (

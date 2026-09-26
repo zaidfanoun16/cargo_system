@@ -17,11 +17,18 @@ import { AdminHeader } from './AdminLayout'
 
 type Handover = {
   id: number
+  // NO_SHOW: the customer arrived after the pickup time had passed
+  status: 'CONFIRMED' | 'NO_SHOW'
   startDate: string
   endDate: string
   totalPrice: number
+  runningLate: boolean
   // From when the car can be handed over (an hour before pickup)
   handoverFrom: string
+  // Until when the car is kept for the customer
+  pickupDeadline: string
+  // After a no-show, someone else booked the car since
+  carTaken: boolean
   user: { id: number; fullName: string; email: string; phoneNumber: string | null }
   car: Pick<Car, 'id' | 'brand' | 'brandAr' | 'model' | 'modelAr' | 'color' | 'colorAr' | 'images'> & {
     licensePlate: string
@@ -295,6 +302,19 @@ export function AdminHandoverPage() {
                 {tooEarly && (
                   <FormAlert type="error">{t('handover.admin.tooEarly', { date: dateTime(handover.handoverFrom) })}</FormAlert>
                 )}
+                {handover.status === 'CONFIRMED' && handover.runningLate && (
+                  <p className="rounded-2xl bg-blue-50 p-3 text-sm font-semibold text-blue-800 dark:bg-blue-950/50 dark:text-blue-300">
+                    {t('handover.admin.runningLate', { date: dateTime(handover.pickupDeadline) })}
+                  </p>
+                )}
+                {handover.status === 'NO_SHOW' &&
+                  (handover.carTaken ? (
+                    <FormAlert type="error">{t('handover.admin.carTaken')}</FormAlert>
+                  ) : (
+                    <p className="rounded-2xl bg-amber-100 p-3 text-sm font-semibold text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                      {t('handover.admin.noShow')}
+                    </p>
+                  ))}
 
                 <fieldset className="space-y-2 border-t border-border pt-4">
                   <legend className="sr-only">{t('handover.admin.checks')}</legend>
@@ -306,9 +326,15 @@ export function AdminHandoverPage() {
                   <Button variant="secondary" className="h-11" onClick={reset}>
                     {t('confirm.cancel')}
                   </Button>
-                  <Button className="h-11" disabled={!checkedId || !checkedLicense || tooEarly || loading} onClick={handOver}>
+                  <Button
+                    className="h-11"
+                    disabled={!checkedId || !checkedLicense || tooEarly || handover.carTaken || loading}
+                    onClick={handOver}
+                  >
                     <KeyRound className="size-4" aria-hidden />
-                    {loading ? t('auth.loading') : t('handover.admin.confirm')}
+                    {loading
+                      ? t('auth.loading')
+                      : t(handover.status === 'NO_SHOW' ? 'handover.admin.confirmLate' : 'handover.admin.confirm')}
                   </Button>
                 </div>
               </div>

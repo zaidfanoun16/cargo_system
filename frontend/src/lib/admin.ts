@@ -28,6 +28,7 @@ export type AdminBooking = {
   totalPrice: number
   createdAt: string
   lateCancellation: boolean
+  runningLate: boolean
   pickedUpAt: string | null
   returnedAt: string | null
   user: {

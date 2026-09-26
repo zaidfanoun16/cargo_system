@@ -1,4 +1,4 @@
-import { ArrowLeft, CalendarX2, CarFront, CircleAlert, CircleCheck, Clock, QrCode, RotateCcw, ShieldCheck, Star, XCircle } from 'lucide-react'
+import { ArrowLeft, CalendarX2, CarFront, CircleAlert, CircleCheck, Clock, QrCode, RotateCcw, ShieldCheck, Star, Timer, XCircle } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
@@ -29,6 +29,10 @@ function tabOf(booking: Booking, now: number): Tab {
   if (booking.status === 'COMPLETED' || new Date(booking.endDate).getTime() <= now) return 'past'
   return 'upcoming'
 }
+
+// "I'm running late" is offered from a day before pickup until the car
+// is no longer kept, once per booking
+const RUNNING_LATE_FROM_HOURS = 24
 
 // Cancelling now would count as a late cancellation
 function isLate(booking: Booking, now: number) {
@@ -88,6 +92,27 @@ export function MyBookingsPage() {
       toast.error(t(errorKey(caught)))
     } finally {
       setCancelling(undefined)
+    }
+  }
+
+  async function markRunningLate(booking: Booking) {
+    const confirmed = await confirm({
+      title: t('bookings.runningLateTitle'),
+      message: t('bookings.runningLateText'),
+      confirmLabel: t('bookings.runningLateConfirm'),
+      cancelLabel: t('confirm.cancel'),
+    })
+    if (!confirmed) return
+
+    try {
+      const updated = await api<{ pickupDeadline: string }>(`/reservations/${booking.id}/running-late`, {
+        method: 'PATCH',
+        auth: true,
+      })
+      toast.success(t('bookings.runningLateDone', { date: dateTime(updated.pickupDeadline) }))
+      bookings.reload()
+    } catch (caught) {
+      toast.error(t(errorKey(caught)))
     }
   }
 
@@ -170,7 +195,13 @@ export function MyBookingsPage() {
               const tooLate =
                 booking.status === 'CONFIRMED' && !canCancel && new Date(booking.startDate).getTime() > now
               const canReview = booking.status === 'COMPLETED' && !booking.reviewed
-              const hasCode = booking.status === 'CONFIRMED' && booking.handoverCode !== null
+              const hasCode = booking.handoverCode !== null
+              const canSayLate =
+                booking.status === 'CONFIRMED' &&
+                !booking.runningLate &&
+                booking.pickupDeadline !== null &&
+                now < new Date(booking.pickupDeadline).getTime() &&
+                now >= new Date(booking.startDate).getTime() - RUNNING_LATE_FROM_HOURS * 60 * 60 * 1000
 
               return (
                 <li
@@ -258,19 +289,31 @@ export function MyBookingsPage() {
                         {t('bookings.pickedUpNote', { date: dateTime(booking.endDate) })}
                       </p>
                     )}
+                    {booking.status === 'CONFIRMED' && booking.runningLate && booking.pickupDeadline && (
+                      <p className="flex items-center gap-2 text-xs font-semibold text-blue-700 dark:text-blue-300">
+                        <Timer className="size-4 shrink-0" aria-hidden />
+                        {t('bookings.runningLateNote', { date: dateTime(booking.pickupDeadline) })}
+                      </p>
+                    )}
                     {booking.status === 'NO_SHOW' && (
-                      <p className="flex items-center gap-2 text-xs font-semibold text-orange-800 dark:text-orange-300">
+                      <p className="flex items-start gap-2 text-xs font-semibold text-orange-800 dark:text-orange-300">
                         <CircleAlert className="size-4 shrink-0" aria-hidden />
-                        {t('bookings.noShowNote')}
+                        {t(hasCode ? 'bookings.noShowStillNote' : 'bookings.noShowNote')}
                       </p>
                     )}
 
-                    {(hasCode || canCancel || canReview || booking.reviewed) && (
+                    {(hasCode || canSayLate || canCancel || canReview || booking.reviewed) && (
                       <div className="mt-auto flex flex-wrap gap-2 border-t border-border pt-4">
                         {hasCode && (
                           <Button className="h-10" onClick={() => setShowingCode(booking)}>
                             <QrCode className="size-4" aria-hidden />
                             {t('handover.show')}
+                          </Button>
+                        )}
+                        {canSayLate && (
+                          <Button variant="secondary" className="h-10" onClick={() => markRunningLate(booking)}>
+                            <Timer className="size-4" aria-hidden />
+                            {t('bookings.runningLate')}
                           </Button>
                         )}
                         {canReview && (

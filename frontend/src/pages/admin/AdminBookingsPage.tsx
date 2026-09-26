@@ -142,8 +142,9 @@ export function AdminBookingsPage() {
               const ended = new Date(booking.endDate).getTime() <= now
               const actions: Action[] = []
               if (booking.status === 'PENDING') actions.push('confirm')
-              // Handed over by scanning the customer's code (from an hour before pickup)
-              if (booking.status === 'CONFIRMED' && !ended) actions.push('pickup')
+              // Handed over by scanning the customer's code (from an hour
+              // before pickup), even after a no-show while the car is free
+              if ((booking.status === 'CONFIRMED' || booking.status === 'NO_SHOW') && !ended) actions.push('pickup')
               if (booking.status === 'PICKED_UP') actions.push('complete')
               if ((booking.status === 'PENDING' || booking.status === 'CONFIRMED') && !started) actions.push('cancel')
 
@@ -163,6 +164,11 @@ export function AdminBookingsPage() {
                       </Link>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
+                      {booking.runningLate && booking.status === 'CONFIRMED' && (
+                        <span className="inline-block rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-800 dark:bg-blue-950 dark:text-blue-300">
+                          {t('admin.bookings.runningLate')}
+                        </span>
+                      )}
                       {booking.lateCancellation && (
                         <span className="inline-block rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900 dark:bg-amber-950 dark:text-amber-200">
                           {t('bookings.lateCancelled')}

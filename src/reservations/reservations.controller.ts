@@ -211,6 +211,30 @@ export class ReservationsController {
 
 
 
+  // USER says they are running late, so the car is kept a little longer
+  @UseGuards(JwtAuthGuard)
+  @Patch(':id/running-late')
+  markRunningLate(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() request: Request,
+  ) {
+
+    const currentUser = request.user as {
+      userId: number;
+      email: string;
+      role: string;
+    };
+
+
+    return this.reservationsService.markRunningLate(
+      id,
+      currentUser.userId,
+    );
+
+  }
+
+
+
   // USER / ADMIN cancels a reservation
   @UseGuards(JwtAuthGuard)
   @Patch(':id/cancel')

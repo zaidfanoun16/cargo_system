@@ -15,6 +15,8 @@ const knownErrors: Record<string, string> = {
   'Reservation dates cannot be in the past': 'errors.pastDates',
   'End date must be after start date': 'errors.endBeforeStart',
   'A reservation must be at least 2 hours': 'errors.minHours',
+  'A reservation must start at least 2 hours from now': 'errors.minLead',
+  'You can have at most 2 active reservations': 'booking.tooManyActive',
   'Start and end times must be on the hour (minutes and seconds must be 0)': 'errors.onTheHour',
   'Car is already reserved for the selected dates': 'booking.unavailable.reserved',
   'Car is currently under maintenance': 'booking.unavailable.maintenance',

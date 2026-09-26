@@ -188,7 +188,8 @@ export class EmailService {
               </p>
 
               ${
-                details.status === 'CONFIRMED' && details.handoverCode
+                (details.status === 'CONFIRMED' || details.status === 'REMINDER') &&
+                details.handoverCode
                   ? `<div style="margin-top: 20px; padding: 16px; border: 2px dashed #3f4a54; border-radius: 12px; text-align: center;">
                       <p style="margin: 0; font-size: 13px; color: #6b737b;">رمز الاستلام</p>
                       <p dir="ltr" style="margin: 6px 0; font-size: 30px; font-weight: bold; letter-spacing: 8px; color: #1f2429;">${details.handoverCode}</p>
@@ -251,7 +252,14 @@ export class EmailService {
 export type ReservationEmailDetails = {
   fullName: string;
   reservationId: number;
-  status: 'CONFIRMED' | 'PICKED_UP' | 'CANCELLED' | 'COMPLETED' | 'NO_SHOW';
+  // REMINDER: sent REMINDER_HOURS before pickup
+  status:
+    | 'CONFIRMED'
+    | 'REMINDER'
+    | 'PICKED_UP'
+    | 'CANCELLED'
+    | 'COMPLETED'
+    | 'NO_SHOW';
   car: string;
   licensePlate: string;
   startDate: Date;
@@ -310,6 +318,24 @@ function statusText(
         'تكرار الإلغاء المتأخر أو عدم الحضور يوقف إمكانية الحجز من حسابك.',
       ],
       button: { label: 'عرض حجوزاتي', path: '/my-bookings' },
+    };
+  }
+
+  if (details.status === 'REMINDER') {
+    return {
+      subject: 'تذكير بموعد الاستلام',
+      badge: 'تذكير',
+      title: 'موعد استلام سيارتك قريب ⏰',
+      message: `نذكّرك بأن موعد استلام سيارتك ${formatDateTime(details.startDate)}. السيارة جاهزة بانتظارك.`,
+      color: '#1d4ed8',
+      badgeBackground: '#dbeafe',
+      stepsTitle: 'قبل أن تأتي',
+      steps: [
+        'أحضر هويتك ورخصة قيادة سارية المفعول.',
+        'اعرض رمز الاستلام (QR) من صفحة حجوزاتي للموظف، فيمسحه ويسلّمك السيارة.',
+        `إذا كنت ستتأخر، اضغط "سأتأخر" في صفحة حجوزاتي، وإلا يُلغى الحجز بعد ${hoursText(NO_SHOW_GRACE_HOURS)} من الموعد.`,
+      ],
+      button: { label: 'عرض رمز الاستلام', path: '/my-bookings' },
     };
   }
 

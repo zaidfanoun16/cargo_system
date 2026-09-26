@@ -766,7 +766,11 @@ describe('ReservationsService', () => {
 
     it('gives a confirmed reservation a 6-digit code', async () => {
       reservationsRepository.findOne
-        .mockResolvedValueOnce({ id: 7, status: 'PENDING' })
+        .mockResolvedValueOnce({
+          id: 7,
+          status: 'PENDING',
+          startDate: new Date('2030-10-12T10:00:00Z'),
+        })
         .mockResolvedValue(null);
 
       const confirmed = await service.confirm(7);
@@ -776,7 +780,11 @@ describe('ReservationsService', () => {
 
     it('picks another code when one is taken', async () => {
       reservationsRepository.findOne
-        .mockResolvedValueOnce({ id: 7, status: 'PENDING' })
+        .mockResolvedValueOnce({
+          id: 7,
+          status: 'PENDING',
+          startDate: new Date('2030-10-12T10:00:00Z'),
+        })
         // First code taken by another confirmed reservation
         .mockResolvedValueOnce({ id: 8 })
         .mockResolvedValue(null);
@@ -1051,6 +1059,124 @@ describe('ReservationsService', () => {
         // 20 minutes late is not a full hour
         [7, 'pickup', null, 0],
       ]);
+    });
+  });
+  describe('booking limits', () => {
+    const now = new Date('2030-10-12T08:00:00Z');
+
+    afterEach(() => jest.useRealTimers());
+
+    beforeEach(() => {
+      jest.useFakeTimers({ now });
+      carsRepository.findOne.mockResolvedValue({ id: 5, pricePerDay: '50.00' });
+      usersRepository.findOne.mockResolvedValue({ id: 1, bookingBlocked: false });
+      reservationsRepository.findOne.mockResolvedValue(null);
+      reservationsRepository.create.mockImplementation((data) => data);
+      reservationsRepository.save.mockImplementation(async (data) => data);
+    });
+
+    const period = {
+      carId: 5,
+      startDate: '2030-10-13T10:00:00Z',
+      endDate: '2030-10-14T10:00:00Z',
+    };
+
+    it('refuses a third active reservation', async () => {
+      reservationsRepository.count.mockResolvedValue(2);
+
+      await expect(service.create(period, currentUser)).rejects.toThrow(
+        'You can have at most 2 active reservations',
+      );
+    });
+
+    it('allows a second active reservation', async () => {
+      reservationsRepository.count.mockResolvedValue(1);
+
+      await expect(service.create(period, currentUser)).resolves.toMatchObject({
+        userId: 1,
+      });
+    });
+
+    it('does not limit staff booking for customers', async () => {
+      reservationsRepository.count.mockResolvedValue(5);
+
+      await expect(
+        service.create(period, { ...currentUser, role: 'ADMIN' }),
+      ).resolves.toMatchObject({ userId: 1 });
+    });
+
+    it('must start at least 2 hours from now', async () => {
+      reservationsRepository.count.mockResolvedValue(0);
+
+      await expect(
+        service.create(
+          { ...period, startDate: '2030-10-12T09:00:00Z' },
+          currentUser,
+        ),
+      ).rejects.toThrow('A reservation must start at least 2 hours from now');
+      await expect(
+        service.create(
+          { ...period, startDate: '2030-10-12T10:00:00Z' },
+          currentUser,
+        ),
+      ).resolves.toMatchObject({ userId: 1 });
+    });
+  });
+
+  describe('pickup reminders', () => {
+    const now = new Date('2030-10-12T08:00:00Z');
+
+    afterEach(() => jest.useRealTimers());
+
+    beforeEach(() => {
+      jest.useFakeTimers({ now });
+      reservationsRepository.save.mockImplementation(async (r) => r);
+    });
+
+    it('reminds once, by email with the code, a day before pickup', async () => {
+      const upcoming = [{ id: 7, status: 'CONFIRMED', reminderSentAt: null }];
+      reservationsRepository.find.mockResolvedValue(upcoming);
+      reservationsRepository.findOne.mockResolvedValue({
+        id: 7,
+        status: 'CONFIRMED',
+        handoverCode: '123456',
+        startDate: new Date('2030-10-13T06:00:00Z'),
+        endDate: new Date('2030-10-14T06:00:00Z'),
+        basePrice: 100,
+        discountPercent: 0,
+        totalPrice: 100,
+        user: { email: 'a@b.com', fullName: 'A' },
+        car: { brand: 'Toyota', model: 'Corolla', licensePlate: 'AB-1' },
+      });
+
+      await expect(service.sendPickupReminders()).resolves.toBe(1);
+
+      expect(upcoming[0].reminderSentAt).toEqual(now);
+      const { where } = reservationsRepository.find.mock.calls[0][0];
+      expect(where.status).toBe('CONFIRMED');
+      expect(where.startDate.value).toEqual([
+        now,
+        new Date('2030-10-13T08:00:00Z'),
+      ]);
+      expect(emailService.sendReservationStatus).toHaveBeenCalledWith(
+        'a@b.com',
+        expect.objectContaining({ status: 'REMINDER', handoverCode: '123456' }),
+      );
+    });
+
+    it('does not remind when confirmed less than a day before pickup', async () => {
+      reservationsRepository.findOne
+        .mockResolvedValueOnce({
+          id: 7,
+          status: 'PENDING',
+          startDate: new Date('2030-10-12T20:00:00Z'),
+        })
+        // The handover code is free, then no email details
+        .mockResolvedValue(null);
+
+      await expect(service.confirm(7)).resolves.toMatchObject({
+        reminderSentAt: now,
+      });
     });
   });
 });

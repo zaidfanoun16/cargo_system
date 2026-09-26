@@ -16,6 +16,8 @@ import { errorKey } from '../../lib/errors'
 import { formatNumber, formatPrice } from '../../lib/format'
 
 const MIN_HOURS = 2
+// Same as the server: a booking starts at least this many hours from now
+const MIN_LEAD_HOURS = 2
 const DEFAULT_HOUR = 10
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour)
 
@@ -66,6 +68,7 @@ export function BookingBox({ car, initialStart, initialEnd }: Props) {
   let periodError: string | undefined
   if (!start || !end) periodError = 'errors.required'
   else if (start.getTime() <= openedAt) periodError = 'errors.pastDates'
+  else if (start.getTime() - openedAt < MIN_LEAD_HOURS * 60 * 60 * 1000) periodError = 'errors.minLead'
   else if (end <= start) periodError = 'errors.endBeforeStart'
   else if (end.getTime() - start.getTime() < MIN_HOURS * 60 * 60 * 1000) periodError = 'errors.minHours'
 

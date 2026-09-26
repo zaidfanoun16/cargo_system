@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom'
 import { CarPhoto } from '../../components/cars/CarPhoto'
 import { FormAlert } from '../../components/form/FormAlert'
 import { Button } from '../../components/ui/Button'
+import { useFetch } from '../../hooks/useFetch'
 import { useToast } from '../../hooks/useToast'
 import { whatsappLink } from '../../lib/admin'
 import { api } from '../../lib/api'
@@ -15,6 +16,7 @@ import { formatDate } from '../../lib/dates'
 import { errorKey } from '../../lib/errors'
 import { formatNumber, formatPrice } from '../../lib/format'
 import { AdminHeader } from './AdminLayout'
+import { type HandoverEvent, HandoverLog } from './HandoverLog'
 
 type Handover = {
   id: number
@@ -68,6 +70,8 @@ export function AdminHandoverPage() {
   const [checkedId, setCheckedId] = useState(false)
   const [checkedLicense, setCheckedLicense] = useState(false)
   const [done, setDone] = useState<Handover>()
+  const log = useFetch<HandoverEvent[]>('/reservations/handovers', { auth: true })
+  const logSection = <HandoverLog events={log.data} error={log.error} loading={log.loading} />
 
   // Turn the camera off when leaving the page
   useEffect(() => () => scanner.current?.destroy(), [])
@@ -139,6 +143,7 @@ export function AdminHandoverPage() {
       toast.success(t(`handover.admin.${handover.mode}.toast`, { id: formatNumber(handover.id, language) }))
       setDone(handover)
       setHandover(undefined)
+      log.reload()
     } catch (caught) {
       setError(errorKey(caught))
     } finally {
@@ -188,6 +193,7 @@ export function AdminHandoverPage() {
             {t('handover.admin.next')}
           </Button>
         </div>
+        {logSection}
       </>
     )
   }
@@ -407,6 +413,8 @@ export function AdminHandoverPage() {
           )}
         </div>
       </div>
+
+      {logSection}
     </>
   )
 }

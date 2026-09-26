@@ -370,6 +370,23 @@ const en: typeof ar = {
       carTaken: 'The car was booked by another customer after the no-show, so it cannot be handed over',
       format: 'The code has 6 digits',
     },
+    log: {
+      title: 'Pickup and return log',
+      filters: {
+        all: 'All',
+        pickup: 'Pickups',
+        return: 'Returns',
+      },
+      search: 'Search by booking #, customer, car or staff',
+      empty: 'No pickups or returns yet',
+      pickup: 'Pickup',
+      return: 'Return',
+      late: '{{duration}} late',
+      by: 'by {{name}}',
+      print: 'Print receipt',
+      printFor: 'Print the receipt of booking #{{id}}',
+      more: 'Show more ({{formatted}})',
+    },
     admin: {
       subtitle: "At pickup or return: scan the QR code on the customer's phone, or type the 6-digit code.",
       cameraHint: "Point the camera at the QR code on the customer's phone.",

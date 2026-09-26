@@ -30,6 +30,14 @@ export function formatHour(hour: number, language: string) {
   }).format(new Date(2000, 0, 1, hour))
 }
 
+// The time of a date, e.g. "١٠:٣٧ ص"
+export function formatTime(date: Date | string, language: string) {
+  return new Intl.DateTimeFormat(language === 'ar' ? 'ar-EG' : 'en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(date))
+}
+
 export function formatDate(date: Date | string, language: string, options?: Intl.DateTimeFormatOptions) {
   return new Intl.DateTimeFormat(language === 'ar' ? 'ar-EG' : 'en-US', {
     day: 'numeric',

@@ -14,6 +14,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   FindOptionsWhere,
   In,
+  IsNull,
+  Not,
   LessThan,
   LessThanOrEqual,
   MoreThan,
@@ -47,6 +49,9 @@ import { EmailService } from '../email/email.service';
 const MIN_RESERVATION_HOURS = 2;
 
 const HOUR_IN_MS = 60 * 60 * 1000;
+
+// How many handed-over bookings the handover log shows
+const HANDOVER_LOG_BOOKINGS = 300;
 
 // Discounts for long rentals, longest first
 const DURATION_DISCOUNTS = [
@@ -1032,6 +1037,129 @@ export class ReservationsService {
     }
 
     return this.complete(reservation.id, staffId);
+
+  }
+
+
+
+  // ADMIN: The log of handovers and returns, newest first, so the staff
+  // can look back at them and print their receipts again. Each booking
+  // gives a "pickup" event, and a "return" event once the car is back.
+  async getHandoverLog(limit = HANDOVER_LOG_BOOKINGS) {
+
+    const reservations =
+      await this.reservationsRepository.find({
+
+        where: {
+          pickedUpAt: Not(IsNull()),
+        },
+
+        relations: {
+          user: true,
+          car: true,
+          pickedUpBy: true,
+          returnedBy: true,
+        },
+
+        select: {
+          id: true,
+          startDate: true,
+          endDate: true,
+          status: true,
+          totalPrice: true,
+          pickedUpAt: true,
+          returnedAt: true,
+
+          user: {
+            id: true,
+            fullName: true,
+            phoneNumber: true,
+          },
+
+          car: {
+            id: true,
+            brand: true,
+            brandAr: true,
+            model: true,
+            modelAr: true,
+            licensePlate: true,
+          },
+
+          pickedUpBy: {
+            id: true,
+            fullName: true,
+          },
+
+          returnedBy: {
+            id: true,
+            fullName: true,
+          },
+        },
+
+        // Returns happen after pickups, so the newest events are among
+        // the latest pickups
+        order: {
+          pickedUpAt: 'DESC',
+        },
+
+        take: limit,
+
+      });
+
+
+    const events = reservations.flatMap((reservation) => {
+
+      const booking = {
+        reservationId: reservation.id,
+        startDate: reservation.startDate,
+        endDate: reservation.endDate,
+        totalPrice: reservation.totalPrice,
+        user: reservation.user,
+        car: reservation.car,
+      };
+
+      const pickup = {
+        ...booking,
+        type: 'pickup' as const,
+        at: reservation.pickedUpAt!,
+        staff: reservation.pickedUpBy?.fullName ?? null,
+        // Full hours after the booked pickup time
+        lateHours: Math.floor(
+          this.hoursAfter(reservation.startDate, reservation.pickedUpAt!),
+        ),
+      };
+
+      if (!reservation.returnedAt) {
+        return [pickup];
+      }
+
+      return [
+        pickup,
+        {
+          ...booking,
+          type: 'return' as const,
+          at: reservation.returnedAt,
+          staff: reservation.returnedBy?.fullName ?? null,
+          // Hours after the booked return time, a started hour counts
+          lateHours: Math.ceil(
+            this.hoursAfter(reservation.endDate, reservation.returnedAt),
+          ),
+        },
+      ];
+
+    });
+
+
+    return events.sort((a, b) => b.at.getTime() - a.at.getTime());
+
+  }
+
+
+
+  // Hours from `due` to `at`; 0 when on time
+  private hoursAfter(due: Date, at: Date) {
+
+    return Math.max(0, (at.getTime() - due.getTime()) / HOUR_IN_MS);
 
   }
 

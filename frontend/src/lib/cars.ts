@@ -65,6 +65,9 @@ export type BookingPolicy = {
 
 export type Availability = {
   month: string
+  carStatus: Car['status']
+  // Periods the car is booked, to show free and booked hours
+  bookedPeriods: { startDate: string; endDate: string }[]
   bookedDates: string[]
 }
 

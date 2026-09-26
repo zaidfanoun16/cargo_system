@@ -47,6 +47,8 @@ import { User } from '../users/entities/user.entity';
 import { Car } from '../cars/entities/car.entity';
 import { Review } from '../reviews/entities/review.entity';
 import { EmailService } from '../email/email.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import type { NotificationType } from '../notifications/entities/notification.entity';
 
 
 // Shortest reservation allowed
@@ -88,6 +90,9 @@ export class ReservationsService {
 
 
     private readonly emailService: EmailService,
+
+
+    private readonly notificationsService: NotificationsService,
 
 
     private readonly configService: ConfigService,
@@ -192,9 +197,34 @@ export class ReservationsService {
       });
 
 
-    return this.reservationsRepository.save(
-      reservation,
-    );
+    const savedReservation =
+      await this.reservationsRepository.save(reservation);
+
+
+    // A new request waiting for the staff to confirm it
+    await this.notificationsService.notifyAdmins('NEW_RESERVATION', {
+      reservationId: savedReservation.id,
+      car: this.carNames(car),
+      startDate,
+      customer: user?.fullName,
+    });
+
+
+    return savedReservation;
+
+  }
+
+
+
+  // The car's names, for notifications
+  private carNames(car: Car) {
+
+    return {
+      brand: car.brand,
+      brandAr: car.brandAr,
+      model: car.model,
+      modelAr: car.modelAr,
+    };
 
   }
 
@@ -911,6 +941,22 @@ export class ReservationsService {
 
     const savedReservation =
       await this.reservationsRepository.save(reservation);
+
+
+    // Let the staff know the customer is on the way
+    const withDetails = await this.reservationsRepository.findOne({
+      where: { id },
+      relations: { user: true, car: true },
+    });
+
+    if (withDetails?.car && withDetails.user) {
+      await this.notificationsService.notifyAdmins('CUSTOMER_RUNNING_LATE', {
+        reservationId: id,
+        car: this.carNames(withDetails.car),
+        startDate: withDetails.startDate,
+        customer: withDetails.user.fullName,
+      });
+    }
 
 
     return {
@@ -1821,10 +1867,74 @@ export class ReservationsService {
 
       await this.usersRepository.update(userId, { bookingBlocked: true });
 
+      await this.notificationsService.notify(userId, 'BOOKING_BLOCKED');
+
       this.logger.log(
         `Blocked user ${userId} from booking (${lateCancellations} late cancellation(s), ${noShows} no-show(s))`,
       );
 
+    }
+
+  }
+
+
+
+  // The same news in the website's notifications: for the customer, and
+  // for the staff when the customer cancelled or did not come
+  private async notifyInApp(
+    reservation: Reservation,
+    cancelledBy?: 'user' | 'admin' | 'system',
+    kind?: 'REMINDER',
+  ) {
+
+    const data = {
+      reservationId: reservation.id,
+      car: this.carNames(reservation.car),
+      startDate: reservation.startDate,
+    };
+
+    const forCustomer: Partial<Record<string, NotificationType>> = {
+      REMINDER: 'PICKUP_REMINDER',
+      [ReservationStatus.CONFIRMED]: 'RESERVATION_CONFIRMED',
+      [ReservationStatus.CANCELLED]: 'RESERVATION_CANCELLED',
+      [ReservationStatus.PICKED_UP]: 'RESERVATION_PICKED_UP',
+      [ReservationStatus.COMPLETED]: 'RESERVATION_COMPLETED',
+      [ReservationStatus.NO_SHOW]: 'RESERVATION_NO_SHOW',
+    };
+
+    const type = forCustomer[kind ?? reservation.status];
+
+    if (type) {
+      await this.notificationsService.notify(reservation.userId, type, {
+        ...data,
+        cancelledBy,
+        lateCancellation: reservation.lateCancellation,
+      });
+    }
+
+
+    if (kind) {
+      return;
+    }
+
+    const customer = reservation.user.fullName;
+
+    if (
+      reservation.status === ReservationStatus.CANCELLED &&
+      cancelledBy === 'user'
+    ) {
+      await this.notificationsService.notifyAdmins('CUSTOMER_CANCELLED', {
+        ...data,
+        customer,
+        lateCancellation: reservation.lateCancellation,
+      });
+    }
+
+    if (reservation.status === ReservationStatus.NO_SHOW) {
+      await this.notificationsService.notifyAdmins('CUSTOMER_NO_SHOW', {
+        ...data,
+        customer,
+      });
     }
 
   }
@@ -1865,6 +1975,9 @@ export class ReservationsService {
       ) {
         return;
       }
+
+
+      await this.notifyInApp(reservation, cancelledBy, kind);
 
 
       // The email is in Arabic, so the Arabic names are used when set

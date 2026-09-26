@@ -9,6 +9,7 @@ import { useToast } from '../../hooks/useToast'
 import { Container } from '../ui/Container'
 import { Logo } from './Logo'
 import { LanguageButton, ThemeButton } from './SettingsButtons'
+import { NotificationBell } from './NotificationBell'
 import { UserMenu } from './UserMenu'
 
 const links = [
@@ -94,9 +95,12 @@ export function Header() {
           <LanguageButton />
           <ThemeButton />
           {user ? (
-            <div className="ms-2">
-              <UserMenu user={user} onLogout={confirmLogout} />
-            </div>
+            <>
+              <NotificationBell />
+              <div className="ms-2">
+                <UserMenu user={user} onLogout={confirmLogout} />
+              </div>
+            </>
           ) : (
             <Link to="/login" className={`ms-2 ${loginLinkClass}`}>
               {t('nav.login')}
@@ -107,6 +111,7 @@ export function Header() {
         {/* Mobile: theme and the account menu stay one tap away */}
         <div className="flex items-center gap-1 md:hidden">
           <ThemeButton />
+          {user && <NotificationBell />}
           {user && <UserMenu user={user} onLogout={confirmLogout} />}
           <button
             type="button"

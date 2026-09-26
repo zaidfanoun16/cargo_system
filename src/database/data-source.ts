@@ -9,6 +9,7 @@ import { CarCategory } from '../car-categories/entities/car-category.entity';
 import { Reservation } from '../reservations/entities/reservation.entity';
 import { Review } from '../reviews/entities/review.entity';
 import { Favorite } from '../favorites/entities/favorite.entity';
+import { Notification } from '../notifications/entities/notification.entity';
 
 
 export default new DataSource({
@@ -33,6 +34,7 @@ export default new DataSource({
     Reservation,
     Review,
     Favorite,
+    Notification,
   ],
 
   migrations: [

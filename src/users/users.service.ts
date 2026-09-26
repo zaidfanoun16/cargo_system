@@ -16,6 +16,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ChangeEmailDto } from './dto/change-email.dto';
 import { EmailService } from '../email/email.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { normalizePhoneNumber } from '../common/phone/phone-number';
 import {
   checkVerificationCode,
@@ -41,6 +42,8 @@ export class UsersService {
     private readonly reservationsRepository: Repository<Reservation>,
 
     private readonly emailService: EmailService,
+
+    private readonly notificationsService: NotificationsService,
 
     private readonly configService: ConfigService,
   ) { }
@@ -351,6 +354,11 @@ export class UsersService {
     }
 
     const updatedUser = await this.usersRepository.save(user);
+
+    await this.notificationsService.notify(
+      id,
+      blocked ? 'BOOKING_BLOCKED' : 'BOOKING_ALLOWED',
+    );
 
     return this.sanitizeUser(updatedUser);
   }

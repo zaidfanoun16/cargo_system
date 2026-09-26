@@ -7,6 +7,7 @@ import { CarPhoto } from '../../components/cars/CarPhoto'
 import { StatusBadge } from '../../components/cars/StatusBadge'
 import { FormAlert } from '../../components/form/FormAlert'
 import { Button } from '../../components/ui/Button'
+import { ScrollRow } from '../../components/ui/ScrollRow'
 import { Container } from '../../components/ui/Container'
 import { useConfirm } from '../../hooks/useConfirm'
 import { useFetch } from '../../hooks/useFetch'
@@ -95,7 +96,7 @@ export function MyBookingsPage() {
       <h1 className="text-3xl font-extrabold sm:text-4xl">{t('nav.myBookings')}</h1>
       <p className="mt-2 text-muted">{t('bookings.subtitle')}</p>
 
-      <div className="mt-6 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]" role="tablist">
+      <ScrollRow className="mt-6" innerClassName="gap-2 pb-1" role="tablist">
         {tabs.map((name) => (
           <button
             key={name}
@@ -119,7 +120,7 @@ export function MyBookingsPage() {
             )}
           </button>
         ))}
-      </div>
+      </ScrollRow>
 
       <div className="mt-6">
         {bookings.error && !bookings.loading ? (

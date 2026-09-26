@@ -4,6 +4,8 @@ import type ar from './ar'
 const en: typeof ar = {
   app: {
     tagline: 'Car rental made easy',
+    scrollBack: 'Show previous',
+    scrollMore: 'Show more',
   },
   nav: {
     admin: 'Dashboard',

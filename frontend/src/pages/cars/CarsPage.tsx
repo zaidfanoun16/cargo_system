@@ -8,6 +8,7 @@ import { CarCard, CarCardSkeleton } from '../../components/cars/CarCard'
 import { FormAlert } from '../../components/form/FormAlert'
 import { Button } from '../../components/ui/Button'
 import { Container } from '../../components/ui/Container'
+import { ScrollRow } from '../../components/ui/ScrollRow'
 import { useFetch } from '../../hooks/useFetch'
 import { type CarsPage as CarsResponse, type Category, categoryName } from '../../lib/cars'
 import { toDateInput } from '../../lib/dates'
@@ -148,7 +149,7 @@ export function CarsPage() {
         </div>
 
         {/* Categories scroll sideways on phones */}
-        <div className="-mx-4 mt-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:-mx-5 sm:px-5 [scrollbar-width:none]">
+        <ScrollRow className="-mx-4 mt-4 sm:-mx-5" innerClassName="gap-2 px-4 pb-1 sm:px-5" fadeClassName="from-surface">
           <button type="button" className={chipClass(!categoryId)} onClick={() => update({ category: null })}>
             {t('cars.allCategories')}
           </button>
@@ -163,7 +164,7 @@ export function CarsPage() {
               {categoryName(category, language)}
             </button>
           ))}
-        </div>
+        </ScrollRow>
 
         {hasFilters && (
           <button

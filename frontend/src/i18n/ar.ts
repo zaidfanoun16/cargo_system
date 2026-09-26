@@ -2,6 +2,8 @@
 const ar = {
   app: {
     tagline: 'تأجير سيارات بسهولة',
+    scrollBack: 'عرض السابق',
+    scrollMore: 'عرض المزيد',
   },
   nav: {
     admin: 'لوحة التحكم',

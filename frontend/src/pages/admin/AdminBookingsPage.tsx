@@ -6,6 +6,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { StatusBadge } from '../../components/cars/StatusBadge'
 import { FormAlert } from '../../components/form/FormAlert'
 import { Button } from '../../components/ui/Button'
+import { ScrollRow } from '../../components/ui/ScrollRow'
 import { useConfirm } from '../../hooks/useConfirm'
 import { useFetch } from '../../hooks/useFetch'
 import { useToast } from '../../hooks/useToast'
@@ -84,7 +85,7 @@ export function AdminBookingsPage() {
       <AdminHeader title={t('admin.nav.bookings')} subtitle={t('admin.bookings.subtitle')} />
 
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:px-0" role="tablist">
+        <ScrollRow className="-mx-4 min-w-0 sm:mx-0 md:flex-1" innerClassName="gap-2 px-4 pb-1 sm:px-0" role="tablist">
           {FILTERS.map((filter) => (
             <button
               key={filter}
@@ -106,8 +107,8 @@ export function AdminBookingsPage() {
               )}
             </button>
           ))}
-        </div>
-        <label className="relative block md:w-72">
+        </ScrollRow>
+        <label className="relative block md:w-72 md:shrink-0">
           <span className="sr-only">{t('admin.bookings.search')}</span>
           <Search className="pointer-events-none absolute start-3 top-1/2 size-5 -translate-y-1/2 text-muted" aria-hidden />
           <input

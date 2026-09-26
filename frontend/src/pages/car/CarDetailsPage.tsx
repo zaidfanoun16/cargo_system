@@ -1,5 +1,5 @@
 import { ArrowLeft, Calendar, CarFront, Palette, Tag } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { type ReactNode, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 
@@ -9,6 +9,7 @@ import { Container } from '../../components/ui/Container'
 import { useFetch } from '../../hooks/useFetch'
 import { ApiError } from '../../lib/api'
 import { type Car, carName, categoryDescription, categoryName, colorName } from '../../lib/cars'
+import { toDateInput } from '../../lib/dates'
 import { formatNumber, formatPrice } from '../../lib/format'
 import { AvailabilityCalendar } from './AvailabilityCalendar'
 import { BookingBox } from './BookingBox'
@@ -24,6 +25,13 @@ export function CarDetailsPage() {
   const validId = Number.isInteger(carId) && carId > 0
 
   const { data: car, error } = useFetch<Car>(validId ? `/cars/${carId}` : null)
+
+  // A free time picked on the calendar starts a new booking there
+  const [picked, setPicked] = useState<{ start: Date; end: Date }>()
+  function pick(start: Date, end: Date) {
+    setPicked({ start, end })
+    document.getElementById('booking')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
   const current = car?.id === carId ? car : undefined
 
   // Back to the list with the same dates
@@ -107,11 +115,19 @@ export function CarDetailsPage() {
 
         {/* Beside the photos on large screens, under the title on phones */}
         <div id="booking" className="scroll-mt-20 lg:sticky lg:top-20 lg:col-start-2 lg:row-span-3 lg:row-start-1">
-          <BookingBox car={current} initialStart={params.get('startDate')} initialEnd={params.get('endDate')} />
+          <BookingBox
+            // A new pick starts the booking box again from that time
+            key={picked ? picked.start.toISOString() : 'search'}
+            car={current}
+            initialStart={picked ? toDateInput(picked.start) : params.get('startDate')}
+            initialEnd={picked ? toDateInput(picked.end) : params.get('endDate')}
+            initialHour={picked?.start.getHours()}
+            initialReturnHour={picked?.end.getHours()}
+          />
         </div>
 
         <div className="grid gap-6 lg:col-start-1">
-          <AvailabilityCalendar carId={current.id} />
+          <AvailabilityCalendar carId={current.id} onPick={pick} />
           <Reviews carId={current.id} />
         </div>
       </div>

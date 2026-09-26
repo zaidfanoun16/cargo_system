@@ -29,11 +29,14 @@ type Props = {
   // Dates chosen on the cars page, used as the starting period
   initialStart: string | null
   initialEnd: string | null
+  // Pickup and return hours picked on the availability calendar
+  initialHour?: number
+  initialReturnHour?: number
 }
 
 // Pick the period, see the exact price (the same the booking will cost),
 // then book. Prices come from the server, never calculated here.
-export function BookingBox({ car, initialStart, initialEnd }: Props) {
+export function BookingBox({ car, initialStart, initialEnd, initialHour, initialReturnHour }: Props) {
   const { t, i18n } = useTranslation()
   const language = i18n.language
   const { user } = useAuth()
@@ -45,14 +48,16 @@ export function BookingBox({ car, initialStart, initialEnd }: Props) {
   const today = toDateInput(new Date())
   const startFromSearch = isValidDateInput(initialStart) && initialStart >= today ? initialStart : tomorrow
   const endFromSearch =
-    isValidDateInput(initialEnd) && initialEnd > startFromSearch
+    isValidDateInput(initialEnd) &&
+    // A time picked on the calendar can end the same day
+    (initialEnd > startFromSearch || (initialReturnHour !== undefined && initialEnd === startFromSearch))
       ? initialEnd
       : toDateInput(addDays(atHour(startFromSearch, 0), 3))
 
   const [pickupDate, setPickupDate] = useState(startFromSearch)
-  const [pickupHour, setPickupHour] = useState(DEFAULT_HOUR)
+  const [pickupHour, setPickupHour] = useState(initialHour ?? DEFAULT_HOUR)
   const [returnDate, setReturnDate] = useState(endFromSearch)
-  const [returnHour, setReturnHour] = useState(DEFAULT_HOUR)
+  const [returnHour, setReturnHour] = useState(initialReturnHour ?? DEFAULT_HOUR)
 
   // Read once: the server checks the time again when booking
   const [openedAt] = useState(() => Date.now())

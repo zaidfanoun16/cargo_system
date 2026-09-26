@@ -245,19 +245,21 @@ export class CarsService {
     const monthStart = new Date(Date.UTC(year, monthIndex, 1));
     const monthEnd = new Date(Date.UTC(year, monthIndex + 1, 1));
 
-    // Same rule as creating a reservation: active reservations block
+    // Same rule as creating a reservation: active reservations block.
+    // The periods are shown in the customer's time zone, so the search
+    // reaches a day past each end of the (UTC) month.
+    const dayInMs = 24 * 60 * 60 * 1000;
     const reservations = await this.reservationsRepository.find({
       select: { startDate: true, endDate: true, status: true },
       where: {
         carId: id,
         status: In(ACTIVE_STATUSES),
-        startDate: LessThan(monthEnd),
-        endDate: MoreThan(monthStart),
+        startDate: LessThan(new Date(monthEnd.getTime() + dayInMs)),
+        endDate: MoreThan(new Date(monthStart.getTime() - dayInMs)),
       },
       order: { startDate: 'ASC' },
     });
 
-    const dayInMs = 24 * 60 * 60 * 1000;
     const bookedDates: string[] = [];
 
     for (

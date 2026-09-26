@@ -18,6 +18,10 @@ export const CANCELLATION_CUTOFF_HOURS = 2;
 // after the pickup time becomes NO_SHOW
 export const NO_SHOW_GRACE_HOURS = 1;
 
+// A customer who says they are running late (once per reservation) gets
+// this many more hours before the reservation becomes NO_SHOW
+export const RUNNING_LATE_EXTRA_HOURS = 1;
+
 // The car can be handed over this many hours before the pickup time
 export const EARLY_PICKUP_HOURS = 1;
 
@@ -68,11 +72,29 @@ export function cancellationWindow(reservation: {
 }
 
 
+// Until when the customer can pick up the car before the reservation
+// becomes NO_SHOW
+export function pickupDeadline(reservation: {
+  startDate: Date;
+  runningLate: boolean;
+}) {
+
+  const graceHours =
+    NO_SHOW_GRACE_HOURS + (reservation.runningLate ? RUNNING_LATE_EXTRA_HOURS : 0);
+
+  return new Date(
+    new Date(reservation.startDate).getTime() + graceHours * HOUR_IN_MS,
+  );
+
+}
+
+
 // The numbers above, for the frontend
 export const POLICY = {
   freeCancellationHours: FREE_CANCELLATION_HOURS,
   cancellationCutoffHours: CANCELLATION_CUTOFF_HOURS,
   noShowGraceHours: NO_SHOW_GRACE_HOURS,
+  runningLateExtraHours: RUNNING_LATE_EXTRA_HOURS,
   maxLateCancellations: MAX_LATE_CANCELLATIONS,
   maxNoShows: MAX_NO_SHOWS,
   strikeWindowDays: STRIKE_WINDOW_DAYS,

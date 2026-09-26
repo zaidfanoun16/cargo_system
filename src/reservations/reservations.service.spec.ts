@@ -731,9 +731,15 @@ describe('ReservationsService', () => {
       await expect(service.markNoShows()).resolves.toBe(1);
 
       expect(missed[0].status).toBe('NO_SHOW');
-      const { where } = reservationsRepository.find.mock.calls[0][0];
-      expect(where.status).toBe('CONFIRMED');
-      expect(where.startDate.value).toEqual(new Date('2030-01-15T11:00:00Z'));
+      const [onTime, runningLate] =
+        reservationsRepository.find.mock.calls[0][0].where;
+      expect(onTime).toMatchObject({ status: 'CONFIRMED', runningLate: false });
+      expect(onTime.startDate.value).toEqual(new Date('2030-01-15T11:00:00Z'));
+      // Customers running late get an hour more
+      expect(runningLate).toMatchObject({ status: 'CONFIRMED', runningLate: true });
+      expect(runningLate.startDate.value).toEqual(
+        new Date('2030-01-15T10:00:00Z'),
+      );
     });
 
     it('blocks the user after 2 no-shows', async () => {
@@ -779,21 +785,27 @@ describe('ReservationsService', () => {
 
       const [first, second] = reservationsRepository.findOne.mock.calls
         .slice(1, 3)
-        .map(([options]) => options.where.handoverCode);
+        .map(([options]) => options.where[0].handoverCode);
       expect(first).not.toBe(second);
     });
 
-    it('only shows the code while the reservation is confirmed', async () => {
+    it('only shows the code while the car can be handed over', async () => {
+      jest.useFakeTimers({ now: new Date('2030-10-13T10:00:00Z') });
+      const endDate = new Date('2030-10-14T10:00:00Z');
       reservationsRepository.find.mockResolvedValue([
-        { id: 7, status: 'CONFIRMED', handoverCode: '123456' },
-        { id: 8, status: 'PICKED_UP', handoverCode: '654321' },
+        { id: 7, status: 'CONFIRMED', handoverCode: '123456', endDate },
+        { id: 8, status: 'PICKED_UP', handoverCode: '654321', endDate },
+        // Still running: the customer may arrive late
+        { id: 9, status: 'NO_SHOW', handoverCode: '111111', endDate },
+        { id: 10, status: 'NO_SHOW', handoverCode: '222222', endDate: new Date('2030-10-12T10:00:00Z') },
       ]);
       reviewsRepository.find.mockResolvedValue([]);
 
-      const [confirmed, pickedUp] = await service.getMyReservations(1);
+      const codes = (await service.getMyReservations(1)).map(
+        (reservation) => reservation.handoverCode,
+      );
 
-      expect(confirmed.handoverCode).toBe('123456');
-      expect(pickedUp.handoverCode).toBeNull();
+      expect(codes).toEqual(['123456', null, '111111', null]);
     });
 
     it('rejects an unknown code', async () => {
@@ -806,6 +818,8 @@ describe('ReservationsService', () => {
 
     it('says when the car was already handed over', async () => {
       reservationsRepository.findOne
+        // Not confirmed, not a no-show
+        .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce({ id: 7, status: 'PICKED_UP' });
 
@@ -833,6 +847,98 @@ describe('ReservationsService', () => {
       expect(reservationsRepository.findOne.mock.calls[0][0].where).toEqual({
         handoverCode: '123456',
         status: 'CONFIRMED',
+      });
+    });
+  });
+  describe('running late', () => {
+    const now = new Date('2030-10-12T10:30:00Z');
+
+    const reservation = () => ({
+      id: 7,
+      userId: 1,
+      carId: 5,
+      status: 'CONFIRMED',
+      runningLate: false,
+      handoverCode: '123456',
+      startDate: new Date('2030-10-12T10:00:00Z'),
+      endDate: new Date('2030-10-14T10:00:00Z'),
+    });
+
+    afterEach(() => jest.useRealTimers());
+
+    beforeEach(() => {
+      jest.useFakeTimers({ now });
+      reservationsRepository.save.mockImplementation(async (r) => r);
+    });
+
+    it('keeps the car an hour longer for a customer running late', async () => {
+      reservationsRepository.findOne.mockResolvedValue(reservation());
+
+      await expect(service.markRunningLate(7, 1)).resolves.toMatchObject({
+        runningLate: true,
+        pickupDeadline: new Date('2030-10-12T12:00:00Z'),
+      });
+    });
+
+    it('can only be used once', async () => {
+      reservationsRepository.findOne.mockResolvedValue({
+        ...reservation(),
+        runningLate: true,
+      });
+
+      await expect(service.markRunningLate(7, 1)).rejects.toThrow(
+        'You already said you are running late',
+      );
+    });
+
+    it('is too late once the pickup time has passed', async () => {
+      jest.setSystemTime(new Date('2030-10-12T11:00:00Z'));
+      reservationsRepository.findOne.mockResolvedValue(reservation());
+
+      await expect(service.markRunningLate(7, 1)).rejects.toThrow(
+        'The pickup time has already passed',
+      );
+    });
+
+    it("cannot be used on someone else's reservation", async () => {
+      reservationsRepository.findOne.mockResolvedValue(reservation());
+
+      await expect(service.markRunningLate(7, 2)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+    });
+
+    it('still hands the car over after a no-show when it is free', async () => {
+      reservationsRepository.findOne
+        .mockResolvedValueOnce({ ...reservation(), status: 'NO_SHOW' })
+        // isReservedDuring: nobody booked the car since
+        .mockResolvedValueOnce(null);
+
+      await expect(service.pickUp(7)).resolves.toMatchObject({
+        status: 'PICKED_UP',
+        pickedUpAt: now,
+      });
+    });
+
+    it('refuses after a no-show when someone else booked the car', async () => {
+      reservationsRepository.findOne
+        .mockResolvedValueOnce({ ...reservation(), status: 'NO_SHOW' })
+        .mockResolvedValueOnce({ id: 99 });
+
+      await expect(service.pickUp(7)).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('finds a no-show by its code and says whether the car is taken', async () => {
+      reservationsRepository.findOne
+        // Not confirmed
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ ...reservation(), status: 'NO_SHOW' })
+        // isReservedDuring
+        .mockResolvedValueOnce({ id: 99 });
+
+      await expect(service.findByHandoverCode('123456')).resolves.toMatchObject({
+        status: 'NO_SHOW',
+        carTaken: true,
       });
     });
   });

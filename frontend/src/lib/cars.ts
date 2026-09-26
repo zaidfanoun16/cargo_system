@@ -57,6 +57,7 @@ export type BookingPolicy = {
   freeCancellationHours: number
   cancellationCutoffHours: number
   noShowGraceHours: number
+  runningLateExtraHours: number
   maxLateCancellations: number
   maxNoShows: number
   strikeWindowDays: number
@@ -115,6 +116,10 @@ export type Booking = {
   lateCancellation: boolean
   // Shown (as a QR code) to pick up the car; only while CONFIRMED
   handoverCode: string | null
+  // The customer said they are running late (once per booking)
+  runningLate: boolean
+  // Until when the car is kept for the customer; only while CONFIRMED
+  pickupDeadline: string | null
   pickedUpAt: string | null
   returnedAt: string | null
   reviewed: boolean

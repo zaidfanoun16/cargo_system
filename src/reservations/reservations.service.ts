@@ -12,6 +12,7 @@ import { randomInt } from 'crypto';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
+  FindOptionsWhere,
   In,
   LessThan,
   LessThanOrEqual,
@@ -30,6 +31,8 @@ import {
   MAX_NO_SHOWS,
   NO_SHOW_GRACE_HOURS,
   POLICY,
+  RUNNING_LATE_EXTRA_HOURS,
+  pickupDeadline,
   STRIKE_WINDOW_DAYS,
   cancellationWindow,
 } from './reservation-policy';
@@ -388,16 +391,27 @@ export class ReservationsService {
     );
 
 
+    const now = new Date();
+
     return reservations.map((reservation) => ({
       ...reservation,
-      // Only needed, and only shown, until the car is handed over
+      // Only needed, and only shown, until the car is handed over. A
+      // customer who arrives after a no-show can still show it until the
+      // reservation ends.
       handoverCode:
-        reservation.status === ReservationStatus.CONFIRMED
+        reservation.status === ReservationStatus.CONFIRMED ||
+        (reservation.status === ReservationStatus.NO_SHOW &&
+          reservation.endDate > now)
           ? reservation.handoverCode
           : null,
       reviewed: reviewedIds.has(reservation.id),
       // Until when it can be cancelled (and for free), or null
       cancellation: cancellationWindow(reservation),
+      // Until when the car is kept for the customer
+      pickupDeadline:
+        reservation.status === ReservationStatus.CONFIRMED
+          ? pickupDeadline(reservation)
+          : null,
     }));
 
   }
@@ -434,6 +448,7 @@ export class ReservationsService {
           lateCancellation: true,
           cancelledAt: true,
           pickedUpAt: true,
+          runningLate: true,
           returnedAt: true,
           userId: true,
           carId: true,
@@ -511,6 +526,7 @@ export class ReservationsService {
         lateCancellation: true,
         cancelledAt: true,
         pickedUpAt: true,
+        runningLate: true,
         returnedAt: true,
         userId: true,
         carId: true,
@@ -668,6 +684,7 @@ export class ReservationsService {
         lateCancellation: true,
         cancelledAt: true,
         pickedUpAt: true,
+        runningLate: true,
         returnedAt: true,
         userId: true,
         carId: true,
@@ -749,13 +766,17 @@ export class ReservationsService {
 
 
   // ADMIN: Hand the car over to the customer. Allowed from shortly
-  // before pickup until the end of the reservation.
+  // before pickup until the end of the reservation. A customer who
+  // arrives after the reservation became NO_SHOW can still get the car
+  // if nobody else booked it since; the no-show then no longer counts.
   async pickUp(id: number) {
 
     const reservation = await this.findReservation(id);
 
+    const lateArrival = reservation.status === ReservationStatus.NO_SHOW;
 
-    if (reservation.status !== ReservationStatus.CONFIRMED) {
+
+    if (reservation.status !== ReservationStatus.CONFIRMED && !lateArrival) {
       throw new BadRequestException(
         'Only CONFIRMED reservations can be picked up',
       );
@@ -781,6 +802,17 @@ export class ReservationsService {
     }
 
 
+    // The no-show freed the car, so someone may have booked it since
+    if (
+      lateArrival &&
+      (await this.isReservedDuring(reservation.carId, now, reservation.endDate))
+    ) {
+      throw new ConflictException(
+        'The car was booked by someone else after the no-show',
+      );
+    }
+
+
     reservation.status = ReservationStatus.PICKED_UP;
     reservation.pickedUpAt = now;
 
@@ -796,17 +828,66 @@ export class ReservationsService {
 
 
 
+  // USER: Say they are running late (once per reservation), so the car
+  // is kept RUNNING_LATE_EXTRA_HOURS longer before it becomes NO_SHOW
+  async markRunningLate(id: number, userId: number) {
+
+    const reservation = await this.findReservation(id);
+
+
+    if (reservation.userId !== userId) {
+      throw new ForbiddenException(
+        'You can only change your own reservation',
+      );
+    }
+
+    if (reservation.status !== ReservationStatus.CONFIRMED) {
+      throw new BadRequestException(
+        'Only CONFIRMED reservations can be marked as running late',
+      );
+    }
+
+    if (reservation.runningLate) {
+      throw new BadRequestException(
+        'You already said you are running late',
+      );
+    }
+
+    if (new Date() >= pickupDeadline(reservation)) {
+      throw new BadRequestException(
+        'The pickup time has already passed',
+      );
+    }
+
+
+    reservation.runningLate = true;
+
+    const savedReservation =
+      await this.reservationsRepository.save(reservation);
+
+
+    return {
+      ...savedReservation,
+      pickupDeadline: pickupDeadline(savedReservation),
+    };
+
+  }
+
+
+
   // ADMIN: Find the reservation of a handover code (scanned from the
   // customer's QR code or typed), to check the customer and the car
-  // before handing it over
+  // before handing it over. A customer who arrives after their
+  // reservation became NO_SHOW is found too, until it ends, so the staff
+  // can still hand the car over if it is free.
   async findByHandoverCode(code: string) {
 
-    const reservation =
-      await this.reservationsRepository.findOne({
+    const load = (where: FindOptionsWhere<Reservation>) =>
+      this.reservationsRepository.findOne({
 
         where: {
+          ...where,
           handoverCode: code,
-          status: ReservationStatus.CONFIRMED,
         },
 
         relations: {
@@ -822,7 +903,9 @@ export class ReservationsService {
           endDate: true,
           status: true,
           totalPrice: true,
+          runningLate: true,
           userId: true,
+          carId: true,
 
           user: {
             id: true,
@@ -849,10 +932,21 @@ export class ReservationsService {
         },
 
         order: {
+          startDate: 'DESC',
           car: { images: { createdAt: 'ASC' } },
         },
 
       });
+
+
+    const now = new Date();
+
+    const reservation =
+      (await load({ status: ReservationStatus.CONFIRMED })) ??
+      (await load({
+        status: ReservationStatus.NO_SHOW,
+        endDate: MoreThan(now),
+      }));
 
 
     if (!reservation) {
@@ -878,12 +972,21 @@ export class ReservationsService {
     }
 
 
+    const lateArrival = reservation.status === ReservationStatus.NO_SHOW;
+
+
     return {
       ...reservation,
       // From when the car can be handed over (see pickUp)
       handoverFrom: new Date(
         reservation.startDate.getTime() - EARLY_PICKUP_HOURS * HOUR_IN_MS,
       ),
+      // Until when the car is kept for the customer (before NO_SHOW)
+      pickupDeadline: pickupDeadline(reservation),
+      // After a no-show, someone else may have booked the car since
+      carTaken:
+        lateArrival &&
+        (await this.isReservedDuring(reservation.carId, now, reservation.endDate)),
     };
 
   }
@@ -901,18 +1004,28 @@ export class ReservationsService {
 
 
 
-  // A random 6-digit code no other CONFIRMED reservation is using
+  // A random 6-digit code no other reservation that can still be handed
+  // over is using
   private async generateHandoverCode() {
 
     for (let attempt = 0; attempt < 20; attempt++) {
 
       const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
 
+      // A no-show can still be handed over until it ends, so its code
+      // stays taken until then
       const taken = await this.reservationsRepository.findOne({
-        where: {
-          handoverCode: code,
-          status: ReservationStatus.CONFIRMED,
-        },
+        where: [
+          {
+            handoverCode: code,
+            status: ReservationStatus.CONFIRMED,
+          },
+          {
+            handoverCode: code,
+            status: ReservationStatus.NO_SHOW,
+            endDate: MoreThan(new Date()),
+          },
+        ],
       });
 
       if (!taken) {
@@ -1262,18 +1375,29 @@ export class ReservationsService {
   @Cron(CronExpression.EVERY_10_MINUTES)
   async markNoShows() {
 
-    const startedBefore = new Date(
-      Date.now() - NO_SHOW_GRACE_HOURS * HOUR_IN_MS,
-    );
+    const startedBefore = (hours: number) =>
+      new Date(Date.now() - hours * HOUR_IN_MS);
 
 
     const missedReservations =
       await this.reservationsRepository.find({
 
-        where: {
-          status: ReservationStatus.CONFIRMED,
-          startDate: LessThanOrEqual(startedBefore),
-        },
+        // Each object is an OR condition: customers who said they are
+        // running late get more time
+        where: [
+          {
+            status: ReservationStatus.CONFIRMED,
+            runningLate: false,
+            startDate: LessThanOrEqual(startedBefore(NO_SHOW_GRACE_HOURS)),
+          },
+          {
+            status: ReservationStatus.CONFIRMED,
+            runningLate: true,
+            startDate: LessThanOrEqual(
+              startedBefore(NO_SHOW_GRACE_HOURS + RUNNING_LATE_EXTRA_HOURS),
+            ),
+          },
+        ],
 
       });
 

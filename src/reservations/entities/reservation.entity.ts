@@ -92,6 +92,12 @@ export class Reservation {
   handoverCode: string | null;
 
 
+  // The customer said they are running late, so the car is kept for
+  // them a little longer (RUNNING_LATE_EXTRA_HOURS)
+  @Column({ default: false })
+  runningLate: boolean;
+
+
   @Column({ type: 'timestamp', nullable: true })
   returnedAt: Date | null;
 

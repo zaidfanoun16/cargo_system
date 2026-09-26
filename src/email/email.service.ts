@@ -187,6 +187,16 @@ export class EmailService {
                 ${text.message}
               </p>
 
+              ${
+                details.status === 'CONFIRMED' && details.handoverCode
+                  ? `<div style="margin-top: 20px; padding: 16px; border: 2px dashed #3f4a54; border-radius: 12px; text-align: center;">
+                      <p style="margin: 0; font-size: 13px; color: #6b737b;">رمز الاستلام</p>
+                      <p dir="ltr" style="margin: 6px 0; font-size: 30px; font-weight: bold; letter-spacing: 8px; color: #1f2429;">${details.handoverCode}</p>
+                      <p style="margin: 0; font-size: 12px; color: #6b737b;">اعرضه للموظف عند الاستلام، أو افتح رمز QR من صفحة حجوزاتي.</p>
+                    </div>`
+                  : ''
+              }
+
               <table style="width: 100%; margin: 20px 0 8px; border-collapse: collapse; font-size: 14px;">
                 ${rows.map(row).join('')}
               </table>
@@ -253,6 +263,8 @@ export type ReservationEmailDetails = {
   cancelledBy?: 'user' | 'admin' | 'system';
   // The customer cancelled after the free cancellation period
   lateCancellation?: boolean;
+  // Code the customer shows at pickup (confirmed reservations)
+  handoverCode?: string;
 };
 
 type StatusText = {
@@ -292,6 +304,7 @@ function statusText(
       stepsTitle: 'قبل موعد الاستلام',
       steps: [
         'أحضر هويتك ورخصة قيادة سارية المفعول.',
+        'اعرض رمز الاستلام (QR) من صفحة حجوزاتي للموظف، فيمسحه ويسلّمك السيارة.',
         `احضر في موعد الاستلام المذكور أعلاه. إذا لم تحضر خلال ${hoursText(NO_SHOW_GRACE_HOURS)} يُلغى الحجز ويُسجَّل عدم حضور.`,
         cancelStep,
         'تكرار الإلغاء المتأخر أو عدم الحضور يوقف إمكانية الحجز من حسابك.',

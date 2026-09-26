@@ -1,4 +1,4 @@
-import { CalendarCheck, CarFront, LayoutDashboard, Tags, Users } from 'lucide-react'
+import { CalendarCheck, CarFront, LayoutDashboard, ScanLine, Tags, Users } from 'lucide-react'
 import { type ReactNode, Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
 import { NavLink, Outlet } from 'react-router-dom'
@@ -8,6 +8,7 @@ import { Container } from '../../components/ui/Container'
 const sections = [
   { to: '/admin', key: 'admin.nav.dashboard', icon: LayoutDashboard, end: true },
   { to: '/admin/bookings', key: 'admin.nav.bookings', icon: CalendarCheck, end: false },
+  { to: '/admin/handover', key: 'admin.nav.handover', icon: ScanLine, end: false },
   { to: '/admin/cars', key: 'admin.nav.cars', icon: CarFront, end: false },
   { to: '/admin/categories', key: 'admin.nav.categories', icon: Tags, end: false },
   { to: '/admin/users', key: 'admin.nav.users', icon: Users, end: false },

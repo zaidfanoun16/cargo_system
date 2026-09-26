@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 
 import { ConfigService } from '@nestjs/config';
+import { randomInt } from 'crypto';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
@@ -389,6 +390,11 @@ export class ReservationsService {
 
     return reservations.map((reservation) => ({
       ...reservation,
+      // Only needed, and only shown, until the car is handed over
+      handoverCode:
+        reservation.status === ReservationStatus.CONFIRMED
+          ? reservation.handoverCode
+          : null,
       reviewed: reviewedIds.has(reservation.id),
       // Until when it can be cancelled (and for free), or null
       cancellation: cancellationWindow(reservation),
@@ -728,6 +734,8 @@ export class ReservationsService {
     reservation.status =
       ReservationStatus.CONFIRMED;
 
+    reservation.handoverCode = await this.generateHandoverCode();
+
 
     const savedReservation =
       await this.reservationsRepository.save(reservation);
@@ -783,6 +791,139 @@ export class ReservationsService {
     await this.notifyStatusChange(savedReservation.id);
 
     return savedReservation;
+
+  }
+
+
+
+  // ADMIN: Find the reservation of a handover code (scanned from the
+  // customer's QR code or typed), to check the customer and the car
+  // before handing it over
+  async findByHandoverCode(code: string) {
+
+    const reservation =
+      await this.reservationsRepository.findOne({
+
+        where: {
+          handoverCode: code,
+          status: ReservationStatus.CONFIRMED,
+        },
+
+        relations: {
+          user: true,
+          car: {
+            images: true,
+          },
+        },
+
+        select: {
+          id: true,
+          startDate: true,
+          endDate: true,
+          status: true,
+          totalPrice: true,
+          userId: true,
+
+          user: {
+            id: true,
+            fullName: true,
+            email: true,
+            phoneNumber: true,
+          },
+
+          car: {
+            id: true,
+            brand: true,
+            brandAr: true,
+            model: true,
+            modelAr: true,
+            color: true,
+            colorAr: true,
+            licensePlate: true,
+            images: {
+              id: true,
+              url: true,
+              createdAt: true,
+            },
+          },
+        },
+
+        order: {
+          car: { images: { createdAt: 'ASC' } },
+        },
+
+      });
+
+
+    if (!reservation) {
+
+      // Scanned twice: say so instead of "invalid"
+      const handedOver = await this.reservationsRepository.findOne({
+        where: {
+          handoverCode: code,
+          status: ReservationStatus.PICKED_UP,
+        },
+      });
+
+      if (handedOver) {
+        throw new BadRequestException(
+          'This car was already handed over',
+        );
+      }
+
+      throw new NotFoundException(
+        'Invalid handover code',
+      );
+
+    }
+
+
+    return {
+      ...reservation,
+      // From when the car can be handed over (see pickUp)
+      handoverFrom: new Date(
+        reservation.startDate.getTime() - EARLY_PICKUP_HOURS * HOUR_IN_MS,
+      ),
+    };
+
+  }
+
+
+
+  // ADMIN: Hand the car over to the customer who showed this code
+  async handOver(code: string) {
+
+    const reservation = await this.findByHandoverCode(code);
+
+    return this.pickUp(reservation.id);
+
+  }
+
+
+
+  // A random 6-digit code no other CONFIRMED reservation is using
+  private async generateHandoverCode() {
+
+    for (let attempt = 0; attempt < 20; attempt++) {
+
+      const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
+
+      const taken = await this.reservationsRepository.findOne({
+        where: {
+          handoverCode: code,
+          status: ReservationStatus.CONFIRMED,
+        },
+      });
+
+      if (!taken) {
+        return code;
+      }
+
+    }
+
+    throw new ConflictException(
+      'Could not create a handover code, please try again',
+    );
 
   }
 
@@ -1279,6 +1420,7 @@ export class ReservationsService {
           totalPrice: Number(reservation.totalPrice),
           cancelledBy,
           lateCancellation: reservation.lateCancellation,
+          handoverCode: reservation.handoverCode ?? undefined,
         },
       );
 

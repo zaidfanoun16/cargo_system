@@ -1,4 +1,4 @@
-import { Ban, CalendarX2, Check, CheckCheck, KeyRound, MessageCircle, Search, X } from 'lucide-react'
+import { Ban, CalendarX2, Check, CheckCheck, MessageCircle, ScanLine, Search, X } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router-dom'
@@ -142,7 +142,7 @@ export function AdminBookingsPage() {
               const ended = new Date(booking.endDate).getTime() <= now
               const actions: Action[] = []
               if (booking.status === 'PENDING') actions.push('confirm')
-              // The server checks the handover time (from an hour before pickup)
+              // Handed over by scanning the customer's code (from an hour before pickup)
               if (booking.status === 'CONFIRMED' && !ended) actions.push('pickup')
               if (booking.status === 'PICKED_UP') actions.push('complete')
               if ((booking.status === 'PENDING' || booking.status === 'CONFIRMED') && !started) actions.push('cancel')
@@ -226,10 +226,13 @@ export function AdminBookingsPage() {
                         </Button>
                       )}
                       {actions.includes('pickup') && (
-                        <Button className="h-10" disabled={busy === booking.id} onClick={() => run(booking, 'pickup')}>
-                          <KeyRound className="size-4" aria-hidden />
+                        <Link
+                          to="/admin/handover"
+                          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-fg hover:bg-primary-hover"
+                        >
+                          <ScanLine className="size-4" aria-hidden />
                           {t('admin.bookings.pickup')}
-                        </Button>
+                        </Link>
                       )}
                       {actions.includes('complete') && (
                         <Button className="h-10" disabled={busy === booking.id} onClick={() => run(booking, 'complete')}>

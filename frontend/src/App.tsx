@@ -34,6 +34,7 @@ const ResetPasswordPage = lazy(() =>
 const AdminLayout = lazy(() => import('./pages/admin/AdminLayout').then((m) => ({ default: m.AdminLayout })))
 const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage })))
 const AdminBookingsPage = lazy(() => import('./pages/admin/AdminBookingsPage').then((m) => ({ default: m.AdminBookingsPage })))
+const AdminHandoverPage = lazy(() => import('./pages/admin/AdminHandoverPage').then((m) => ({ default: m.AdminHandoverPage })))
 const AdminCarsPage = lazy(() => import('./pages/admin/AdminCarsPage').then((m) => ({ default: m.AdminCarsPage })))
 const CarFormPage = lazy(() => import('./pages/admin/CarFormPage').then((m) => ({ default: m.CarFormPage })))
 const AdminCategoriesPage = lazy(() => import('./pages/admin/AdminCategoriesPage').then((m) => ({ default: m.AdminCategoriesPage })))
@@ -90,6 +91,7 @@ export default function App() {
                 >
                   <Route index element={<AdminDashboardPage />} />
                   <Route path="bookings" element={<AdminBookingsPage />} />
+                  <Route path="handover" element={<AdminHandoverPage />} />
                   <Route path="cars" element={<AdminCarsPage />} />
                   <Route path="cars/new" element={<CarFormPage />} />
                   <Route path="cars/:id" element={<CarFormPage />} />

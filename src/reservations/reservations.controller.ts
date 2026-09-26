@@ -18,6 +18,7 @@ import { ReservationsService } from './reservations.service';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { QuoteReservationDto } from './dto/quote-reservation.dto';
 import { UpdateReservationStatusDto } from './dto/update-reservation-status.dto';
+import { HandoverCodeDto } from './dto/handover-code.dto';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -81,6 +82,35 @@ export class ReservationsController {
     return this.reservationsService.getMyReservations(
       currentUser.userId,
     );
+
+  }
+
+
+
+  // ADMIN looks up the reservation of a handover code (from the
+  // customer's QR code) before handing over the car
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @Get('handover/:code')
+  findByHandoverCode(
+    @Param() params: HandoverCodeDto,
+  ) {
+
+    return this.reservationsService.findByHandoverCode(params.code);
+
+  }
+
+
+
+  // ADMIN hands the car over to the customer who showed the code
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @Post('handover')
+  handOver(
+    @Body() handoverDto: HandoverCodeDto,
+  ) {
+
+    return this.reservationsService.handOver(handoverDto.code);
 
   }
 

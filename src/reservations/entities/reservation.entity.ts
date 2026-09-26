@@ -5,6 +5,7 @@ import {
   ManyToOne,
   JoinColumn,
   CreateDateColumn,
+  Index,
   UpdateDateColumn,
 } from 'typeorm';
 
@@ -81,6 +82,14 @@ export class Reservation {
   // When the car was handed over to the customer, and when it came back
   @Column({ type: 'timestamp', nullable: true })
   pickedUpAt: Date | null;
+
+
+  // 6-digit code the customer shows (as a QR code) to pick up the car.
+  // Set when the reservation is confirmed, and unique among CONFIRMED
+  // reservations.
+  @Index()
+  @Column({ type: 'varchar', length: 6, nullable: true })
+  handoverCode: string | null;
 
 
   @Column({ type: 'timestamp', nullable: true })

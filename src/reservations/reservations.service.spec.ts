@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  NotFoundException,
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
@@ -419,6 +420,8 @@ describe('ReservationsService', () => {
     it('emails the user when a reservation is confirmed', async () => {
       reservationsRepository.findOne
         .mockResolvedValueOnce({ ...reservation })
+        // The new handover code is free
+        .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(withRelations('CONFIRMED'));
 
       await service.confirm(7);
@@ -437,6 +440,7 @@ describe('ReservationsService', () => {
     it('uses the Arabic car name in the email when it is set', async () => {
       reservationsRepository.findOne
         .mockResolvedValueOnce({ ...reservation })
+        .mockResolvedValueOnce(null)
         .mockResolvedValueOnce({
           ...withRelations('CONFIRMED'),
           car: {
@@ -744,6 +748,91 @@ describe('ReservationsService', () => {
 
       expect(usersRepository.update).toHaveBeenCalledWith(1, {
         bookingBlocked: true,
+      });
+    });
+  });
+  describe('handover code', () => {
+    afterEach(() => jest.useRealTimers());
+
+    beforeEach(() => {
+      reservationsRepository.save.mockImplementation(async (r) => r);
+    });
+
+    it('gives a confirmed reservation a 6-digit code', async () => {
+      reservationsRepository.findOne
+        .mockResolvedValueOnce({ id: 7, status: 'PENDING' })
+        .mockResolvedValue(null);
+
+      const confirmed = await service.confirm(7);
+
+      expect(confirmed.handoverCode).toMatch(/^\d{6}$/);
+    });
+
+    it('picks another code when one is taken', async () => {
+      reservationsRepository.findOne
+        .mockResolvedValueOnce({ id: 7, status: 'PENDING' })
+        // First code taken by another confirmed reservation
+        .mockResolvedValueOnce({ id: 8 })
+        .mockResolvedValue(null);
+
+      await service.confirm(7);
+
+      const [first, second] = reservationsRepository.findOne.mock.calls
+        .slice(1, 3)
+        .map(([options]) => options.where.handoverCode);
+      expect(first).not.toBe(second);
+    });
+
+    it('only shows the code while the reservation is confirmed', async () => {
+      reservationsRepository.find.mockResolvedValue([
+        { id: 7, status: 'CONFIRMED', handoverCode: '123456' },
+        { id: 8, status: 'PICKED_UP', handoverCode: '654321' },
+      ]);
+      reviewsRepository.find.mockResolvedValue([]);
+
+      const [confirmed, pickedUp] = await service.getMyReservations(1);
+
+      expect(confirmed.handoverCode).toBe('123456');
+      expect(pickedUp.handoverCode).toBeNull();
+    });
+
+    it('rejects an unknown code', async () => {
+      reservationsRepository.findOne.mockResolvedValue(null);
+
+      await expect(service.findByHandoverCode('000000')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+
+    it('says when the car was already handed over', async () => {
+      reservationsRepository.findOne
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: 7, status: 'PICKED_UP' });
+
+      await expect(service.findByHandoverCode('123456')).rejects.toThrow(
+        'This car was already handed over',
+      );
+    });
+
+    it('hands the car over to the customer who shows the code', async () => {
+      const now = new Date('2030-10-12T09:30:00Z');
+      jest.useFakeTimers({ now });
+      const reservation = {
+        id: 7,
+        status: 'CONFIRMED',
+        handoverCode: '123456',
+        startDate: new Date('2030-10-12T10:00:00Z'),
+        endDate: new Date('2030-10-14T10:00:00Z'),
+      };
+      reservationsRepository.findOne.mockResolvedValue(reservation);
+
+      await expect(service.handOver('123456')).resolves.toMatchObject({
+        status: 'PICKED_UP',
+        pickedUpAt: now,
+      });
+      expect(reservationsRepository.findOne.mock.calls[0][0].where).toEqual({
+        handoverCode: '123456',
+        status: 'CONFIRMED',
       });
     });
   });

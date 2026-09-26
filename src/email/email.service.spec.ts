@@ -132,6 +132,13 @@ describe('EmailService', () => {
       expect(email.html).toContain('٣٠ سبتمبر ٢٠٣٠');
     });
 
+    it('shows the handover code in the confirmation', async () => {
+      const email = await sentEmail({ handoverCode: '042917' });
+
+      expect(email.html).toContain('رمز الاستلام');
+      expect(email.html).toContain('042917');
+    });
+
     it('says when a cancellation was late', async () => {
       const email = await sentEmail({
         status: 'CANCELLED',

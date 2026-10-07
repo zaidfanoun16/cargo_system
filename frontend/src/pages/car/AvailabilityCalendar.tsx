@@ -6,6 +6,7 @@ import { Button } from '../../components/ui/Button'
 import { useFetch } from '../../hooks/useFetch'
 import type { Availability } from '../../lib/cars'
 import { formatTime, toDateInput } from '../../lib/dates'
+import { formatNumber } from '../../lib/format'
 
 const HOUR = 60 * 60 * 1000
 
@@ -136,16 +137,16 @@ export function AvailabilityCalendar({ carId, onPick }: Props) {
     setSelected(toDateInput(inNext ? today : next))
   }
 
-  // Midnight reads "midnight", not "12:00 AM"
-  const time = (value: number) => {
-    const date = new Date(value)
-    return date.getHours() === 0 && date.getMinutes() === 0 ? t('calendar.midnight') : formatTime(date, language)
+  // Always a clock time, e.g. "١٠:٠٠ ص" (the end of the day is "١٢:٠٠ ص")
+  const time = (value: number) => formatTime(new Date(value), language)
+  const hoursLong = (range: Range) => {
+    const count = Math.round((range.end - range.start) / HOUR)
+    return t('booking.hours', { count, formatted: formatNumber(count, language) })
   }
 
-  // Book from the first free hour of the day: a day long, or until the
-  // next booking if that comes sooner
-  function pickDay(day: Day) {
-    const start = day.free[0].start
+  // Book from this hour: a day long, or until the next booking if that
+  // comes sooner
+  function pickFrom(start: number) {
     const nextBooking = Math.min(...periods.filter((period) => period.start >= start).map((period) => period.start))
     onPick?.(new Date(start), new Date(Math.min(start + 24 * HOUR, nextBooking)))
   }
@@ -247,29 +248,35 @@ export function AvailabilityCalendar({ carId, onPick }: Props) {
             </span>
           </div>
 
-          <DayBar day={chosen.day} language={language} />
+          <HourGrid day={chosen.day} language={language} disabled={Boolean(unavailable)} onPick={onPick ? pickFrom : undefined} />
 
           {!unavailable && (
-            <div className="mt-4 space-y-2 text-sm">
+            <div className="mt-4 space-y-3 text-sm">
               {chosen.day.free.length > 0 && (
-                <p>
-                  <span className="font-bold text-emerald-700 dark:text-emerald-400">{t('calendar.freeTimes')}: </span>
-                  {chosen.day.free
-                    .map((range) => t('calendar.fromTo', { from: time(range.start), to: time(range.end) }))
-                    .join(t('calendar.and'))}
-                </p>
+                <div>
+                  <p className="font-bold text-emerald-700 dark:text-emerald-400">{t('calendar.freeTimes')}</p>
+                  <ul className="mt-1.5 space-y-1.5">
+                    {chosen.day.free.map((range) => (
+                      <li key={range.start} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-emerald-50 px-3 py-2 dark:bg-emerald-950/40">
+                        <span className="font-semibold">{t('calendar.fromTo', { from: time(range.start), to: time(range.end) })}</span>
+                        <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300">{hoursLong(range)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
               {chosen.day.booked.length > 0 && (
-                <p>
-                  <span className="font-bold text-red-700 dark:text-red-400">{t('calendar.bookedTimes')}: </span>
-                  {chosen.day.booked
-                    .map((range) =>
-                      range.start <= chosen.day.start && range.end >= chosen.day.end
-                        ? t('calendar.allDay')
-                        : t('calendar.fromTo', { from: time(range.start), to: time(range.end) }),
-                    )
-                    .join(t('calendar.and'))}
-                </p>
+                <div>
+                  <p className="font-bold text-red-700 dark:text-red-400">{t('calendar.bookedTimes')}</p>
+                  <ul className="mt-1.5 space-y-1.5">
+                    {chosen.day.booked.map((range) => (
+                      <li key={range.start} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-red-50 px-3 py-2 dark:bg-red-950/40">
+                        <span className="font-semibold">{t('calendar.fromTo', { from: time(range.start), to: time(range.end) })}</span>
+                        <span className="text-xs font-bold text-red-800 dark:text-red-300">{hoursLong(range)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
               {chosen.day.free.length === 0 && <p className="text-muted">{t('calendar.noFree')}</p>}
             </div>
@@ -278,7 +285,7 @@ export function AvailabilityCalendar({ carId, onPick }: Props) {
           {onPick && !unavailable && chosen.day.free.length > 0 && (
             <Button
               className="mt-4 h-11 w-full sm:w-auto"
-              onClick={() => pickDay(chosen.day)}
+              onClick={() => pickFrom(chosen.day.free[0].start)}
             >
               <CalendarPlus className="size-4" aria-hidden />
               {t('calendar.bookFrom', { time: time(chosen.day.free[0].start) })}
@@ -290,41 +297,56 @@ export function AvailabilityCalendar({ carId, onPick }: Props) {
   )
 }
 
-// 24 hours from midnight to midnight: booked in red, free in green, and
-// the part that can no longer be booked in grey
-function DayBar({ day, language }: { day: Day; language: string }) {
+// The day's 24 hours, one box each: free in green (tap to book from that
+// hour), booked in red, and too soon or past in grey
+function HourGrid({
+  day,
+  language,
+  disabled,
+  onPick,
+}: {
+  day: Day
+  language: string
+  disabled: boolean
+  onPick?: (start: number) => void
+}) {
   const { t } = useTranslation()
-  const length = day.end - day.start
-  const at = (value: number) => ((value - day.start) / length) * 100
+  const date = new Date(day.start)
+  const label = (hour: number) =>
+    new Intl.DateTimeFormat(language === 'ar' ? 'ar-EG' : 'en-US', { hour: 'numeric' }).format(new Date(2000, 0, 1, hour))
 
-  const segment = (range: Range, className: string, key: string) => (
-    <span
-      key={key}
-      className={`absolute inset-y-0 ${className}`}
-      style={{ insetInlineStart: `${at(range.start)}%`, width: `${at(range.end) - at(range.start)}%` }}
-    />
-  )
+  const hours = Array.from({ length: 24 }, (_, hour) => {
+    const start = new Date(date.getFullYear(), date.getMonth(), date.getDate(), hour).getTime()
+    const end = start + HOUR
+    const booked = day.booked.some((range) => range.start < end && range.end > start)
+    const free = !disabled && day.free.some((range) => start >= range.start && end <= range.end)
+    return { hour, start, state: booked ? 'booked' : free ? 'free' : 'past' } as const
+  })
+
+  const styles = {
+    free: 'bg-emerald-100 text-emerald-900 hover:bg-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-200',
+    booked: 'bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-300',
+    past: 'bg-surface-muted text-muted/60',
+  }
 
   return (
-    <div className="mt-4" aria-hidden>
-      <div className="relative h-4 overflow-hidden rounded-full bg-surface-muted">
-        {day.free.map((range, index) => segment(range, 'bg-emerald-500', `free-${index}`))}
-        {day.booked.map((range, index) => segment(range, 'bg-red-500', `booked-${index}`))}
-        {day.bookableFrom > day.start &&
-          segment({ start: day.start, end: day.bookableFrom }, 'bg-[repeating-linear-gradient(45deg,transparent_0_4px,rgb(0_0_0/0.08)_4px_8px)]', 'past')}
-      </div>
-      <div className="relative mt-1 h-4 text-[10px] font-semibold text-muted">
-        {[0, 6, 12, 18, 24].map((hour) => (
-          <span
+    <div className="mt-4">
+      <div className="grid grid-cols-6 gap-1">
+        {hours.map(({ hour, start, state }) => (
+          <button
             key={hour}
-            className={`absolute top-0 whitespace-nowrap ${hour === 0 ? '' : hour === 24 ? '-translate-x-full rtl:translate-x-full' : '-translate-x-1/2 rtl:translate-x-1/2'}`}
-            style={{ insetInlineStart: `${(hour / 24) * 100}%` }}
+            type="button"
+            disabled={state !== 'free' || !onPick}
+            onClick={() => onPick?.(start)}
+            title={state === 'free' ? t('calendar.bookFrom', { time: label(hour) }) : undefined}
+            aria-label={`${label(hour)}: ${t(`calendar.hour.${state}`)}`}
+            className={`h-8 rounded-lg text-[11px] font-bold transition-colors disabled:cursor-default ${styles[state]}`}
           >
-            {new Intl.DateTimeFormat(language === 'ar' ? 'ar-EG' : 'en-US', { hour: 'numeric' }).format(new Date(2000, 0, 1, hour % 24))}
-          </span>
+            {label(hour)}
+          </button>
         ))}
       </div>
-      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted">
+      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted">
         <span className="inline-flex items-center gap-1">
           <span className="h-2 w-3 rounded-sm bg-emerald-500" />
           {t('calendar.legend.freeHours')}
@@ -333,13 +355,12 @@ function DayBar({ day, language }: { day: Day; language: string }) {
           <span className="h-2 w-3 rounded-sm bg-red-500" />
           {t('calendar.legend.bookedHours')}
         </span>
-        {day.bookableFrom > day.start && (
-          <span className="inline-flex items-center gap-1">
-            <span className="h-2 w-3 rounded-sm bg-surface-muted ring-1 ring-border" />
-            {t('calendar.legend.tooSoon')}
-          </span>
-        )}
+        <span className="inline-flex items-center gap-1">
+          <span className="h-2 w-3 rounded-sm bg-surface-muted ring-1 ring-border" />
+          {t('calendar.legend.tooSoon')}
+        </span>
       </div>
+      {onPick && !disabled && <p className="mt-1 text-[11px] text-muted">{t('calendar.tapHour')}</p>}
     </div>
   )
 }

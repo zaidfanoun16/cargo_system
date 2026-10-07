@@ -3,10 +3,12 @@ import { Outlet } from 'react-router-dom'
 
 import { Footer } from './Footer'
 import { Header } from './Header'
+import { ScrollToTop } from './ScrollToTop'
 
 export function Layout() {
   return (
     <div className="flex min-h-dvh flex-col">
+      <ScrollToTop />
       <Header />
       <main className="flex-1">
         {/* Shown for the moment a page is still downloading */}

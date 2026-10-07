@@ -108,6 +108,18 @@ export class Reservation {
   returnedAt: Date | null;
 
 
+  // True when the car came back more than RETURN_GRACE_HOURS after the
+  // return time (counts against the customer, like a late cancellation)
+  @Column({ default: false })
+  lateReturn: boolean;
+
+
+  // When the customer and the staff were told the car is overdue, so it
+  // is said only once
+  @Column({ type: 'timestamp', nullable: true })
+  overdueNotifiedAt: Date | null;
+
+
   // The staff member who handed the car over, and who took it back
   // (shown on the receipts)
   @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })

@@ -125,6 +125,8 @@ export type Booking = {
   pickupDeadline: string | null
   pickedUpAt: string | null
   returnedAt: string | null
+  // Came back more than an hour after the return time (counts as a strike)
+  lateReturn: boolean
   reviewed: boolean
   // Until when it can be cancelled online, and until when for free;
   // null when its status does not allow cancelling

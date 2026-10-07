@@ -33,7 +33,9 @@ import {
   MAX_ACTIVE_RESERVATIONS,
   MIN_LEAD_HOURS,
   REMINDER_HOURS,
+  RETURN_GRACE_HOURS,
   MAX_LATE_CANCELLATIONS,
+  MAX_LATE_RETURNS,
   MAX_NO_SHOWS,
   NO_SHOW_GRACE_HOURS,
   POLICY,
@@ -680,6 +682,7 @@ export class ReservationsService {
           pickedUpAt: true,
           runningLate: true,
           returnedAt: true,
+          lateReturn: true,
           userId: true,
           carId: true,
           createdAt: true,
@@ -758,6 +761,7 @@ export class ReservationsService {
         pickedUpAt: true,
         runningLate: true,
         returnedAt: true,
+        lateReturn: true,
         userId: true,
         carId: true,
         createdAt: true,
@@ -822,7 +826,12 @@ export class ReservationsService {
 
     const records = new Map<
       number,
-      { completed: number; lateCancellations: number; noShows: number }
+      {
+        completed: number;
+        lateCancellations: number;
+        noShows: number;
+        lateReturns: number;
+      }
     >();
 
     if (userIds.length === 0) {
@@ -835,6 +844,7 @@ export class ReservationsService {
       completed: string;
       lateCancellations: string;
       noShows: string;
+      lateReturns: string;
     }[] = await this.reservationsRepository
       .createQueryBuilder('reservation')
       .select('reservation.userId', 'userId')
@@ -850,6 +860,10 @@ export class ReservationsService {
         `COUNT(*) FILTER (WHERE "reservation"."status" = '${ReservationStatus.NO_SHOW}')`,
         'noShows',
       )
+      .addSelect(
+        `COUNT(*) FILTER (WHERE "reservation"."lateReturn")`,
+        'lateReturns',
+      )
       .where('reservation.userId IN (:...userIds)', { userIds })
       .groupBy('reservation.userId')
       .getRawMany();
@@ -861,6 +875,7 @@ export class ReservationsService {
         completed: Number(row.completed),
         lateCancellations: Number(row.lateCancellations),
         noShows: Number(row.noShows),
+        lateReturns: Number(row.lateReturns),
       });
     }
 
@@ -916,6 +931,7 @@ export class ReservationsService {
         pickedUpAt: true,
         runningLate: true,
         returnedAt: true,
+        lateReturn: true,
         userId: true,
         carId: true,
         createdAt: true,
@@ -1554,15 +1570,27 @@ export class ReservationsService {
     }
 
 
+    const now = new Date();
+
     reservation.status = ReservationStatus.COMPLETED;
-    reservation.returnedAt = new Date();
+    reservation.returnedAt = now;
     reservation.returnedById = staffId;
+
+    // Returning early is fine. Returning more than RETURN_GRACE_HOURS
+    // late counts against the customer.
+    reservation.lateReturn =
+      now.getTime() >
+      reservation.endDate.getTime() + RETURN_GRACE_HOURS * HOUR_IN_MS;
 
 
     const savedReservation =
       await this.reservationsRepository.save(reservation);
 
     await this.notifyStatusChange(savedReservation.id);
+
+    if (savedReservation.lateReturn) {
+      await this.applyStrikes(savedReservation.userId);
+    }
 
     return savedReservation;
 
@@ -1975,8 +2003,67 @@ export class ReservationsService {
 
 
 
+  // Every 10 minutes, tell the customer and the staff once when a car
+  // has not come back RETURN_GRACE_HOURS after its return time. Returning
+  // it from then on counts as a late return.
+  @Cron(CronExpression.EVERY_10_MINUTES)
+  async notifyOverdueReturns() {
+
+    const overdue = await this.reservationsRepository.find({
+      where: {
+        status: ReservationStatus.PICKED_UP,
+        endDate: LessThanOrEqual(
+          new Date(Date.now() - RETURN_GRACE_HOURS * HOUR_IN_MS),
+        ),
+        overdueNotifiedAt: IsNull(),
+      },
+      relations: {
+        user: true,
+        car: true,
+      },
+    });
+
+
+    for (const reservation of overdue) {
+
+      reservation.overdueNotifiedAt = new Date();
+
+      await this.reservationsRepository.save(reservation);
+
+      const data = {
+        reservationId: reservation.id,
+        car: this.carNames(reservation.car),
+        endDate: reservation.endDate,
+      };
+
+      await this.notificationsService.notify(
+        reservation.userId,
+        'RETURN_OVERDUE',
+        data,
+      );
+
+      await this.notificationsService.notifyAdmins('CUSTOMER_LATE_RETURN', {
+        ...data,
+        customer: reservation.user.fullName,
+      });
+
+    }
+
+
+    if (overdue.length > 0) {
+      this.logger.log(`${overdue.length} car(s) overdue for return`);
+    }
+
+
+    return overdue.length;
+
+  }
+
+
+
   // Stop a user from booking after MAX_LATE_CANCELLATIONS late
-  // cancellations or MAX_NO_SHOWS no-shows in the last STRIKE_WINDOW_DAYS.
+  // cancellations, MAX_NO_SHOWS no-shows or MAX_LATE_RETURNS late returns
+  // in the last STRIKE_WINDOW_DAYS.
   // Only strikes after an admin last allowed the user again count.
   private async applyStrikes(userId: number) {
 
@@ -2001,7 +2088,7 @@ export class ReservationsService {
         : windowStart;
 
 
-    const [lateCancellations, noShows] = await Promise.all([
+    const [lateCancellations, noShows, lateReturns] = await Promise.all([
 
       this.reservationsRepository.count({
         where: {
@@ -2019,12 +2106,21 @@ export class ReservationsService {
         },
       }),
 
+      this.reservationsRepository.count({
+        where: {
+          userId,
+          lateReturn: true,
+          returnedAt: MoreThanOrEqual(since),
+        },
+      }),
+
     ]);
 
 
     if (
       lateCancellations >= MAX_LATE_CANCELLATIONS ||
-      noShows >= MAX_NO_SHOWS
+      noShows >= MAX_NO_SHOWS ||
+      lateReturns >= MAX_LATE_RETURNS
     ) {
 
       await this.usersRepository.update(userId, { bookingBlocked: true });
@@ -2032,7 +2128,7 @@ export class ReservationsService {
       await this.notificationsService.notify(userId, 'BOOKING_BLOCKED');
 
       this.logger.log(
-        `Blocked user ${userId} from booking (${lateCancellations} late cancellation(s), ${noShows} no-show(s))`,
+        `Blocked user ${userId} from booking (${lateCancellations} late cancellation(s), ${noShows} no-show(s), ${lateReturns} late return(s))`,
       );
 
     }
@@ -2071,6 +2167,7 @@ export class ReservationsService {
         ...data,
         cancelledBy,
         lateCancellation: reservation.lateCancellation,
+        lateReturn: reservation.lateReturn,
       });
     }
 
@@ -2160,6 +2257,7 @@ export class ReservationsService {
           totalPrice: Number(reservation.totalPrice),
           cancelledBy,
           lateCancellation: reservation.lateCancellation,
+          lateReturn: reservation.lateReturn,
           handoverCode: reservation.handoverCode ?? undefined,
         },
       );

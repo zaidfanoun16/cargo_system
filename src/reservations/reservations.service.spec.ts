@@ -710,7 +710,86 @@ describe('ReservationsService', () => {
       await expect(service.complete(7)).resolves.toMatchObject({
         status: 'COMPLETED',
         returnedAt: new Date('2030-10-13T10:00:00Z'),
+        lateReturn: false,
       });
+    });
+
+    it('is on time up to an hour after the return time', async () => {
+      jest.useFakeTimers({ now: new Date('2030-10-14T11:00:00Z') });
+      reservationsRepository.findOne.mockResolvedValue({
+        ...reservation(),
+        status: 'PICKED_UP',
+      });
+
+      await expect(service.complete(7)).resolves.toMatchObject({
+        lateReturn: false,
+      });
+      expect(usersRepository.findOne).not.toHaveBeenCalled();
+    });
+
+    it('counts a return more than an hour late against the customer', async () => {
+      jest.useFakeTimers({ now: new Date('2030-10-14T11:01:00Z') });
+      reservationsRepository.findOne.mockResolvedValue({
+        ...reservation(),
+        status: 'PICKED_UP',
+      });
+      usersRepository.findOne.mockResolvedValue({ id: 1, bookingBlocked: false });
+      // late cancellations, no-shows, late returns
+      reservationsRepository.count
+        .mockResolvedValueOnce(0)
+        .mockResolvedValueOnce(0)
+        .mockResolvedValueOnce(2);
+
+      await expect(service.complete(7)).resolves.toMatchObject({
+        status: 'COMPLETED',
+        lateReturn: true,
+      });
+      // The second late return stops the customer from booking
+      expect(usersRepository.update).toHaveBeenCalledWith(1, {
+        bookingBlocked: true,
+      });
+    });
+  });
+
+  describe('notifyOverdueReturns', () => {
+    const now = new Date('2030-01-15T12:00:00Z');
+
+    afterEach(() => jest.useRealTimers());
+
+    beforeEach(() => {
+      jest.useFakeTimers({ now });
+      reservationsRepository.save.mockImplementation(async (r) => r);
+    });
+
+    it('tells the customer and the staff once when a car is an hour overdue', async () => {
+      const overdue = [
+        {
+          id: 3,
+          userId: 1,
+          status: 'PICKED_UP',
+          endDate: new Date('2030-01-15T10:00:00Z'),
+          overdueNotifiedAt: null,
+          user: { fullName: 'Layan' },
+          car: { brand: 'BMW', brandAr: null, model: 'X5', modelAr: null },
+        },
+      ];
+      reservationsRepository.find.mockResolvedValue(overdue);
+
+      await expect(service.notifyOverdueReturns()).resolves.toBe(1);
+
+      const { where } = reservationsRepository.find.mock.calls[0][0];
+      expect(where.status).toBe('PICKED_UP');
+      expect(where.endDate.value).toEqual(new Date('2030-01-15T11:00:00Z'));
+      expect(overdue[0].overdueNotifiedAt).toEqual(now);
+      expect(notificationsService.notify).toHaveBeenCalledWith(
+        1,
+        'RETURN_OVERDUE',
+        expect.objectContaining({ reservationId: 3 }),
+      );
+      expect(notificationsService.notifyAdmins).toHaveBeenCalledWith(
+        'CUSTOMER_LATE_RETURN',
+        expect.objectContaining({ reservationId: 3, customer: 'Layan' }),
+      );
     });
   });
 

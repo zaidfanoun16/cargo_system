@@ -231,19 +231,6 @@ const en: typeof ar = {
     noReviews: 'No reviews yet. Customers review a car after their booking ends.',
   },
   booking: {
-    modeLabel: 'How to rent',
-    mode: {
-      days: 'By the day',
-      hours: 'By the hour',
-    },
-    dailyOnly: 'This car is rented by the day only',
-    pickupDay: 'Pickup day',
-    howManyDays: 'How many days?',
-    howManyHours: 'How many hours?',
-    less: 'Fewer',
-    more: 'More',
-    discountHint: '{{week}}% off from 7 days, {{month}}% off from 30 days.',
-    returnOn: 'Return',
     car: 'Car',
     confirmTitle: 'Confirm your booking',
     confirmButton: 'Yes, book it',
@@ -554,7 +541,7 @@ const en: typeof ar = {
     next: 'New booking',
   },
   calendar: {
-    hint: 'Tap a green or amber day to pick it up that day.',
+    hint: 'Pick a day to see its free hours.',
     today: 'Today',
     states: {
       free: 'Free all day',
@@ -566,7 +553,9 @@ const en: typeof ar = {
       free: 'Free all day',
       partial: 'Free some hours',
       full: 'Fully booked',
-      yourBooking: 'Your booking',
+      freeHours: 'Free',
+      bookedHours: 'Booked',
+      tooSoon: 'Past or too soon to book',
     },
     freeTimes: 'Free',
     bookedTimes: 'Booked',
@@ -575,7 +564,7 @@ const en: typeof ar = {
     allDay: 'all day',
     midnight: 'midnight',
     noFree: 'No free hours on this day. Pick another day.',
-    pickedAsPickup: 'Pickup set to {{time}}. Change the time or length below.',
+    bookFrom: 'Book from {{time}}',
   },
   reviews: {
     title: 'How was your trip?',

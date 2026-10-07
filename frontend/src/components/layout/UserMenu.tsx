@@ -11,10 +11,16 @@ type Props = {
   onLogout: () => void
 }
 
-const items = [
+const customerItems = [
   { to: '/account', key: 'nav.account', icon: UserRound },
   { to: '/my-bookings', key: 'nav.myBookings', icon: CalendarDays },
   { to: '/favorites', key: 'nav.favorites', icon: Heart },
+] as const
+
+// Admins do not book or save cars, so they get the dashboard instead
+const adminItems = [
+  { to: '/admin', key: 'nav.admin', icon: LayoutDashboard },
+  { to: '/account', key: 'nav.account', icon: UserRound },
 ] as const
 
 // The first letter of the name, in a circle
@@ -29,7 +35,8 @@ export function Avatar({ name, className = '' }: { name: string; className?: str
   )
 }
 
-// Tapping the avatar or name opens: profile, bookings, favorites, log out.
+// Tapping the avatar or name opens: profile, bookings, favorites (or the
+// dashboard for admins), log out.
 // Closes on a choice, a click outside, Escape, or a page change.
 export function UserMenu({ user, onLogout }: Props) {
   const { t } = useTranslation()
@@ -122,13 +129,7 @@ export function UserMenu({ user, onLogout }: Props) {
               </div>
             </div>
             <div className="border-t border-border pt-2">
-              {user.role === 'ADMIN' && (
-                <Link to="/admin" role="menuitem" className={itemClass} onClick={() => setOpen(false)}>
-                  <LayoutDashboard className="size-5 text-muted" aria-hidden />
-                  {t('nav.admin')}
-                </Link>
-              )}
-              {items.map(({ to, key, icon: Icon }) => (
+              {(user.role === 'ADMIN' ? adminItems : customerItems).map(({ to, key, icon: Icon }) => (
                 <Link key={to} to={to} role="menuitem" className={itemClass} onClick={() => setOpen(false)}>
                   <Icon className="size-5 text-muted" aria-hidden />
                   {t(key)}

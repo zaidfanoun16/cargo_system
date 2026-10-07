@@ -178,12 +178,7 @@ function CarForm({ car, onSaved }: { car?: AdminCar; onSaved: () => void }) {
         title={car ? carName(car, language) : t('admin.cars.add')}
         action={
           car && (
-            <div className="flex items-center gap-3">
-              <CarStatusBadge status={car.status} />
-              <Link to={`/cars/${car.id}`} className="text-sm font-semibold text-muted underline-offset-4 hover:text-text hover:underline">
-                {t('admin.cars.viewPublic')}
-              </Link>
-            </div>
+            <CarStatusBadge status={car.status} />
           )
         }
       />

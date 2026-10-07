@@ -1,14 +1,16 @@
-import { ArrowLeft, Calendar, CarFront, Palette, Tag } from 'lucide-react'
+import { ArrowLeft, Calendar, CarFront, Palette, Share2, Tag } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 
+import { CarCard } from '../../components/cars/CarCard'
 import { FavoriteButton } from '../../components/cars/FavoriteButton'
 import { RatingBadge } from '../../components/cars/Rating'
 import { Container } from '../../components/ui/Container'
 import { useFetch } from '../../hooks/useFetch'
+import { useToast } from '../../hooks/useToast'
 import { ApiError } from '../../lib/api'
-import { type Car, carName, categoryDescription, categoryName, colorName } from '../../lib/cars'
+import { type Car, type CarsPage, carName, categoryDescription, categoryName, colorName } from '../../lib/cars'
 import { toDateInput } from '../../lib/dates'
 import { formatNumber, formatPrice } from '../../lib/format'
 import { AvailabilityCalendar } from './AvailabilityCalendar'
@@ -25,6 +27,33 @@ export function CarDetailsPage() {
   const validId = Number.isInteger(carId) && carId > 0
 
   const { data: car, error } = useFetch<Car>(validId ? `/cars/${carId}` : null)
+  const toast = useToast()
+
+  // Other available cars of the same category, for "Similar cars"
+  const categoryId = car?.id === carId ? car.category.id : null
+  const similar = useFetch<CarsPage>(
+    categoryId ? `/cars?${new URLSearchParams({ categoryId: String(categoryId), status: 'AVAILABLE', limit: '4' })}` : null,
+  )
+  const similarCars = (similar.data?.data ?? []).filter((other) => other.id !== carId).slice(0, 3)
+
+  // The phone's share menu, or copy the link where there is none
+  async function share(name: string) {
+    const url = window.location.href
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: `${name} · CarGo`, url })
+      } catch {
+        // Closing the share menu is not an error
+      }
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(url)
+      toast.success(t('car.linkCopied'))
+    } catch {
+      toast.error(t('errors.generic'))
+    }
+  }
 
   // A free time picked on the calendar starts a new booking there
   const [picked, setPicked] = useState<{ start: Date; end: Date }>()
@@ -90,7 +119,18 @@ export function CarDetailsPage() {
           </div>
           <div className="mt-3 flex items-start justify-between gap-3">
             <h1 className="text-3xl font-extrabold sm:text-4xl">{name}</h1>
-            <FavoriteButton carId={current.id} carName={name} variant="plain" className="shrink-0" />
+            <div className="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                onClick={() => share(name)}
+                aria-label={t('car.share')}
+                title={t('car.share')}
+                className="grid size-11 place-items-center rounded-full text-muted transition-colors hover:bg-surface-muted hover:text-text"
+              >
+                <Share2 className="size-5" aria-hidden />
+              </button>
+              <FavoriteButton carId={current.id} carName={name} variant="plain" />
+            </div>
           </div>
 
           {current.status !== 'AVAILABLE' && (
@@ -131,6 +171,22 @@ export function CarDetailsPage() {
           <Reviews carId={current.id} />
         </div>
       </div>
+
+      {similarCars.length > 0 && (
+        <section className="mt-12" aria-labelledby="similar-cars">
+          <h2 id="similar-cars" className="text-2xl font-extrabold">
+            {t('car.similar')}
+          </h2>
+          <p className="mt-1 text-sm text-muted">
+            {t('car.similarNote', { category: categoryName(current.category, language) })}
+          </p>
+          <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {similarCars.map((other) => (
+              <CarCard key={other.id} car={other} search={backSearch} />
+            ))}
+          </div>
+        </section>
+      )}
     </Container>
   )
 }

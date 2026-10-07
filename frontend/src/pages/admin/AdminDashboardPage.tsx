@@ -12,6 +12,7 @@ import { errorKey } from '../../lib/errors'
 import { formatNumber, formatPrice } from '../../lib/format'
 import { AdminHeader } from './AdminLayout'
 import { RevenueChart } from './RevenueChart'
+import { TodaySchedule } from './TodaySchedule'
 
 const STATUSES: BookingStatus[] = ['PENDING', 'CONFIRMED', 'PICKED_UP', 'COMPLETED', 'NO_SHOW', 'CANCELLED']
 
@@ -74,6 +75,10 @@ export function AdminDashboardPage() {
         <StatTile icon={<Users className="size-5" aria-hidden />} label={t('admin.stats.customers')}>
           {number(stats.totals.users)}
         </StatTile>
+      </div>
+
+      <div className="mt-6">
+        <TodaySchedule />
       </div>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[1fr_320px]">

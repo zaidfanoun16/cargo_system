@@ -25,6 +25,9 @@ const AccountPage = lazy(() => import('./pages/account/AccountPage').then((m) =>
 const FavoritesPage = lazy(() =>
   import('./pages/favorites/FavoritesPage').then((m) => ({ default: m.FavoritesPage })),
 )
+const PolicyPage = lazy(() => import('./pages/info/PolicyPage').then((m) => ({ default: m.PolicyPage })))
+const OffersPage = lazy(() => import('./pages/info/OffersPage').then((m) => ({ default: m.OffersPage })))
+const AboutPage = lazy(() => import('./pages/info/AboutPage').then((m) => ({ default: m.AboutPage })))
 const CarsPage = lazy(() => import('./pages/cars/CarsPage').then((m) => ({ default: m.CarsPage })))
 const CarDetailsPage = lazy(() => import('./pages/car/CarDetailsPage').then((m) => ({ default: m.CarDetailsPage })))
 const ResetPasswordPage = lazy(() =>
@@ -63,6 +66,9 @@ export default function App() {
                   <Route index element={<HomePage />} />
                   <Route path="cars" element={<CarsPage />} />
                   <Route path="cars/:id" element={<CarDetailsPage />} />
+                  <Route path="offers" element={<OffersPage />} />
+                  <Route path="policy" element={<PolicyPage />} />
+                  <Route path="about" element={<AboutPage />} />
                   <Route
                     path="my-bookings"
                     element={

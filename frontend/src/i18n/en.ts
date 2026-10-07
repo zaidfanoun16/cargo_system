@@ -8,6 +8,9 @@ const en: typeof ar = {
     scrollMore: 'Show more',
   },
   nav: {
+    offers: 'Offers',
+    policy: 'Booking policy',
+    about: 'About us',
     admin: 'Dashboard',
     favorites: 'Favorite cars',
     userMenu: 'Account menu for {{name}}',
@@ -841,7 +844,118 @@ const en: typeof ar = {
       ended: 'This booking has already ended',
     },
   },
+  policy: {
+    eyebrow: 'Before you book',
+    intro: 'Simple, clear rules that are fair to you and to every other customer. These are the same rules the system applies to every booking.',
+    highlights: {
+      free: { value: '24 hours', label: 'free cancellation before pickup' },
+      grace: { value: '1 hour', label: 'to show up after the pickup time' },
+      active: { value: '2 bookings', label: 'at most at the same time' },
+    },
+    sections: {
+      booking: {
+        title: 'Booking',
+        items: [
+          'A booking starts at least 2 hours from now and lasts at least 2 hours.',
+          'Pickup and return times are on the hour, like 10:00.',
+          'You can have at most 2 active bookings at the same time.',
+          'A request waits for CarGo to confirm it. If it is not confirmed within 24 hours or before it starts, it is cancelled automatically and does not count against you.',
+          'You get an email and a notification when it is confirmed, and a reminder 24 hours before pickup.',
+        ],
+      },
+      cancellation: {
+        title: 'Cancelling',
+        items: [
+          'A request that is not confirmed yet can be cancelled for free at any time.',
+          'Once confirmed, cancelling is free until 24 hours before pickup.',
+          'Between 24 and 2 hours before pickup you can still cancel, but it counts as a late cancellation.',
+          'Less than 2 hours before pickup it cannot be cancelled online; please contact us.',
+        ],
+      },
+      pickup: {
+        title: 'Pickup and showing up',
+        items: [
+          "Bring your ID and a valid driver's license.",
+          'Show your pickup code (QR) from My bookings; the staff scan it and hand you the car.',
+          'You can pick the car up from an hour before the pickup time.',
+          'If you do not show up within an hour of the pickup time, the booking is cancelled and marked as a no-show.',
+          'Running late? Tap "I\'m running late" in My bookings and we keep the car an hour longer.',
+          'If you arrive after that and the car is still free, you can still get it with the same code.',
+        ],
+      },
+      return: {
+        title: 'Returning',
+        items: [
+          'Bring the car back to the office at the return time.',
+          'Show the same code to the staff; a return receipt can be printed.',
+          'Return the car in the same condition and with the same fuel level.',
+          'After the return you can rate the car to help other customers.',
+        ],
+      },
+      prices: {
+        title: 'Prices and discounts',
+        items: [
+          'Cars are priced by the day, or by the hour for cars with an hourly price.',
+          'Extra hours after whole days cost the hourly price, never more than a full day.',
+          '10% off automatically from 7 days, and 20% off from 30 days.',
+          'The price you see before booking is the price of the booking.',
+        ],
+      },
+      strikes: {
+        title: 'Strikes and booking blocks',
+        items: [
+          'Within 90 days, 3 late cancellations or 2 no-shows stop your account from booking.',
+          'You are notified when booking is stopped, and CarGo can allow it again.',
+          'Once allowed again, the count starts over.',
+        ],
+      },
+    },
+    ctaText: 'Ready? Pick your car and book in minutes.',
+  },
+  offers: {
+    eyebrow: 'Save more',
+    intro: 'The longer you rent, the less you pay. Discounts are applied automatically when you book, no codes needed.',
+    cards: {
+      week: { value: '10%', title: 'Weekly discount', text: 'Book 7 days or more and get 10% off the whole rental.' },
+      month: { value: '20%', title: 'Monthly discount', text: 'Book 30 days or more and get 20% off the whole rental.' },
+      hourly: { value: 'From 2 hours', title: 'Rent by the hour', text: 'Only need a car for a few hours? Pay by the hour, never more than a full day.' },
+    },
+    pricesTitle: 'Weekly and monthly prices for every car',
+    pricesNote: 'Prices after the discount for whole days. "Book a week" and "Book a month" start the booking tomorrow.',
+    perDay: 'Day',
+    perWeek: 'Week (−{{percent}}%)',
+    perMonth: 'Month (−{{percent}}%)',
+    perHour: 'Hour',
+    bookWeek: 'Book a week',
+    bookMonth: 'Book a month',
+  },
+  about: {
+    eyebrow: 'Get to know us',
+    intro: 'CarGo is a car rental platform that brings online booking and the office together, so renting is simple and clear from the first click to returning the car.',
+    storyTitle: 'Our story',
+    story1: 'CarGo started from a simple idea: renting a car should be as easy as booking a ticket. Instead of calls, paperwork and waiting, customers see the free cars and their real prices and book in minutes.',
+    story2: 'At the office, our team manages the bookings and hands cars over and takes them back by scanning a QR code, so no request gets lost and no car is booked twice.',
+    numbers: {
+      cars: 'cars in our fleet',
+      categories: 'categories',
+      online: 'online booking',
+    },
+    valuesTitle: 'Why CarGo?',
+    values: {
+      online: { title: 'Book any time', text: 'The site works around the clock, on a computer or a phone.' },
+      clear: { title: 'Clear prices and rules', text: 'Know the final price and the cancellation policy before you book. No surprises.' },
+      qr: { title: 'Fast pickup', text: 'One QR code for pickup and return, no paperwork.' },
+      languages: { title: 'Arabic and English', text: 'The site and the emails in your language, with a dark mode.' },
+    },
+    stepsTitle: 'How it works',
+    steps: {
+      book: { title: 'Book online', text: 'Choose the car and the time, and get the confirmation by email.' },
+      pickup: { title: 'Scan to pick up', text: 'Show your QR code at the office and take your car.' },
+      return: { title: 'Return and rate', text: 'Return the car with the same code, then tell us how it went.' },
+    },
+  },
   footer: {
+    links: 'Site links',
     rights: 'All rights reserved',
   },
   notFound: {

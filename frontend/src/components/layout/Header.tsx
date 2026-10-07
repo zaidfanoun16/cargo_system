@@ -15,6 +15,9 @@ import { UserMenu } from './UserMenu'
 const links = [
   { to: '/', key: 'nav.home' },
   { to: '/cars', key: 'nav.cars' },
+  { to: '/offers', key: 'nav.offers' },
+  { to: '/policy', key: 'nav.policy' },
+  { to: '/about', key: 'nav.about' },
 ] as const
 
 function navLinkClass({ isActive }: { isActive: boolean }) {
@@ -89,7 +92,7 @@ export function Header() {
         <Logo />
 
         {/* Desktop navigation */}
-        <nav className="hidden items-center gap-1 md:flex">
+        <nav className="hidden items-center gap-1 lg:flex">
           {navLinks.map((link) => (
             <NavLink key={link.to} to={link.to} end={link.to !== '/admin'} className={navLinkClass}>
               {t(link.key)}
@@ -97,7 +100,7 @@ export function Header() {
           ))}
         </nav>
 
-        <div className="hidden items-center gap-1 md:flex">
+        <div className="hidden items-center gap-1 lg:flex">
           <LanguageButton />
           <ThemeButton />
           {user ? (
@@ -115,7 +118,7 @@ export function Header() {
         </div>
 
         {/* Mobile: theme and the account menu stay one tap away */}
-        <div className="flex items-center gap-1 md:hidden">
+        <div className="flex items-center gap-1 lg:hidden">
           <ThemeButton />
           {user && <NotificationBell />}
           {user && <UserMenu user={user} onLogout={confirmLogout} />}
@@ -133,7 +136,7 @@ export function Header() {
       </Container>
 
       {menuOpen && (
-        <div id="mobile-menu" className="border-t border-border bg-surface md:hidden">
+        <div id="mobile-menu" className="border-t border-border bg-surface lg:hidden">
           <Container className="flex flex-col gap-1 py-3">
             {navLinks.map((link) => (
               <NavLink key={link.to} to={link.to} end={link.to !== '/admin'} className={navLinkClass} onClick={closeMenu}>

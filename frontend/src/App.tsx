@@ -1,7 +1,8 @@
 import { MotionConfig } from 'motion/react'
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Outlet, Route, Routes } from 'react-router-dom'
 
+import { CustomerOnly } from './components/CustomerOnly'
 import { ConfirmProvider } from './components/feedback/ConfirmProvider'
 import { ToastProvider } from './components/feedback/ToastProvider'
 import { Layout } from './components/layout/Layout'
@@ -51,25 +52,34 @@ export default function App() {
           <BrowserRouter>
             <Routes>
               <Route element={<Layout />}>
-                <Route index element={<HomePage />} />
-                <Route path="cars" element={<CarsPage />} />
-                <Route path="cars/:id" element={<CarDetailsPage />} />
+                {/* The shop: visitors and customers only, admins go to the dashboard */}
                 <Route
-                  path="my-bookings"
                   element={
-                    <RequireAuth>
-                      <MyBookingsPage />
-                    </RequireAuth>
+                    <CustomerOnly>
+                      <Outlet />
+                    </CustomerOnly>
                   }
-                />
-                <Route
-                  path="favorites"
-                  element={
-                    <RequireAuth>
-                      <FavoritesPage />
-                    </RequireAuth>
-                  }
-                />
+                >
+                  <Route index element={<HomePage />} />
+                  <Route path="cars" element={<CarsPage />} />
+                  <Route path="cars/:id" element={<CarDetailsPage />} />
+                  <Route
+                    path="my-bookings"
+                    element={
+                      <RequireAuth>
+                        <MyBookingsPage />
+                      </RequireAuth>
+                    }
+                  />
+                  <Route
+                    path="favorites"
+                    element={
+                      <RequireAuth>
+                        <FavoritesPage />
+                      </RequireAuth>
+                    }
+                  />
+                </Route>
                 <Route path="login" element={<LoginPage />} />
                 <Route path="register" element={<RegisterPage />} />
                 <Route path="verify-email" element={<VerifyEmailPage />} />

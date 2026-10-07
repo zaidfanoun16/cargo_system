@@ -54,6 +54,7 @@ const knownErrors: Record<string, string> = {
   'This reservation has already ended': 'admin.errors.ended',
   'It is too late to cancel this reservation online. Please contact us': 'bookings.errors.tooLate',
   'Your account cannot make new reservations. Please contact us': 'booking.blocked',
+  'Admins cannot make reservations for themselves': 'errors.adminNoBooking',
 }
 
 export function errorKey(error: unknown): string {

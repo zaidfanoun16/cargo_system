@@ -1,4 +1,4 @@
-import { Ban, CalendarX2, Check, MessageCircle, Printer, ScanLine, Search, Undo2, X } from 'lucide-react'
+import { Ban, CalendarX2, Check, Download, MessageCircle, Printer, ScanLine, Search, Undo2, X } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router-dom'
@@ -13,7 +13,8 @@ import { useToast } from '../../hooks/useToast'
 import { type AdminBooking, whatsappLink } from '../../lib/admin'
 import { api } from '../../lib/api'
 import { type BookingStatus, carName } from '../../lib/cars'
-import { formatDate } from '../../lib/dates'
+import { formatDate, toDateInput } from '../../lib/dates'
+import { downloadCsv } from '../../lib/download'
 import { errorKey } from '../../lib/errors'
 import { formatNumber, formatPrice } from '../../lib/format'
 import { AdminHeader } from './AdminLayout'
@@ -57,6 +58,30 @@ export function AdminBookingsPage() {
 
   const dateTime = (value: string) => formatDate(value, language, { weekday: 'short', hour: 'numeric', minute: '2-digit' })
 
+  // "2030-10-15 10:00" in local time, which spreadsheets read as a date
+  const sheetDate = (value: string) => `${toDateInput(new Date(value))} ${new Date(value).toTimeString().slice(0, 5)}`
+
+  // The bookings on screen (this tab and search) as a spreadsheet
+  function exportCsv() {
+    const header = ['id', 'status', 'customer', 'email', 'phone', 'car', 'plate', 'pickup', 'return', 'total'].map((column) =>
+      t(`admin.bookings.csv.${column}`),
+    )
+    const rows = shown.map((booking) => [
+      booking.id,
+      t(`bookings.status.${booking.status}`),
+      booking.user.fullName,
+      booking.user.email,
+      booking.user.phoneNumber ?? '',
+      carName(booking.car, language),
+      booking.car.licensePlate,
+      sheetDate(booking.startDate),
+      sheetDate(booking.endDate),
+      booking.totalPrice,
+    ])
+    const today = new Date().toISOString().slice(0, 10)
+    downloadCsv([header, ...rows], `cargo-bookings-${status.toLowerCase()}-${today}.csv`)
+  }
+
   async function run(booking: AdminBooking, action: 'confirm' | 'cancel') {
     const car = carName(booking.car, language)
     const confirmed = await confirm({
@@ -82,7 +107,16 @@ export function AdminBookingsPage() {
 
   return (
     <>
-      <AdminHeader title={t('admin.nav.bookings')} subtitle={t('admin.bookings.subtitle')} />
+      <AdminHeader
+        title={t('admin.nav.bookings')}
+        subtitle={t('admin.bookings.subtitle')}
+        action={
+          <Button variant="secondary" className="h-10" onClick={exportCsv} disabled={shown.length === 0}>
+            <Download className="size-4" aria-hidden />
+            {t('admin.bookings.export')}
+          </Button>
+        }
+      />
 
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <ScrollRow className="-mx-4 min-w-0 sm:mx-0 md:flex-1" innerClassName="gap-2 px-4 pb-1 sm:px-0" role="tablist">

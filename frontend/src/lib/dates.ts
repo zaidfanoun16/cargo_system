@@ -46,3 +46,21 @@ export function formatDate(date: Date | string, language: string, options?: Intl
     ...options,
   }).format(new Date(date))
 }
+
+const HOUR_MS = 60 * 60 * 1000
+
+// How far a moment is from now, e.g. "خلال ٣ أيام" / "in 3 days" or
+// "قبل ساعتين" / "2 hours ago", in the biggest unit that fits
+export function formatRelative(date: Date | string, language: string, now = Date.now()) {
+  const diff = new Date(date).getTime() - now
+  const format = new Intl.RelativeTimeFormat(language === 'ar' ? 'ar-EG' : 'en-US', { numeric: 'always' })
+
+  if (Math.abs(diff) >= DAY_MS) return format.format(Math.round(diff / DAY_MS), 'day')
+  if (Math.abs(diff) >= HOUR_MS) return format.format(Math.round(diff / HOUR_MS), 'hour')
+  return format.format(Math.round(diff / 60_000), 'minute')
+}
+
+// Same calendar day in the user's time zone
+export function isSameDay(a: Date | string | number, b: Date | string | number) {
+  return toDateInput(new Date(a)) === toDateInput(new Date(b))
+}

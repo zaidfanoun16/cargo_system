@@ -1,4 +1,19 @@
-import { ArrowLeft, CalendarX2, CarFront, CircleAlert, CircleCheck, Clock, QrCode, RotateCcw, ShieldCheck, Star, Timer, XCircle } from 'lucide-react'
+import {
+  ArrowLeft,
+  CalendarPlus,
+  CalendarX2,
+  CarFront,
+  CircleAlert,
+  CircleCheck,
+  Clock,
+  Hourglass,
+  QrCode,
+  RotateCcw,
+  ShieldCheck,
+  Star,
+  Timer,
+  XCircle,
+} from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
@@ -14,7 +29,8 @@ import { useFetch } from '../../hooks/useFetch'
 import { useToast } from '../../hooks/useToast'
 import { api } from '../../lib/api'
 import { type Booking, carName } from '../../lib/cars'
-import { formatDate } from '../../lib/dates'
+import { formatDate, formatRelative } from '../../lib/dates'
+import { downloadCalendarEvent } from '../../lib/download'
 import { errorKey } from '../../lib/errors'
 import { formatNumber, formatPrice } from '../../lib/format'
 import { HandoverDialog } from './HandoverDialog'
@@ -116,6 +132,34 @@ export function MyBookingsPage() {
     }
   }
 
+  // A calendar event from pickup to return, to save on the phone
+  function addToCalendar(booking: Booking) {
+    const name = carName(booking.car, language)
+    downloadCalendarEvent({
+      id: `booking-${booking.id}`,
+      title: t('bookings.calendarTitle', { car: name }),
+      description: t('bookings.calendarText', { id: booking.id }),
+      start: booking.startDate,
+      end: booking.endDate,
+      fileName: `cargo-booking-${booking.id}.ics`,
+    })
+  }
+
+  // "Pickup in 3 days", "Return in 5 hours" or "Return overdue"
+  function timing(booking: Booking) {
+    const start = new Date(booking.startDate).getTime()
+    const end = new Date(booking.endDate).getTime()
+    if ((booking.status === 'PENDING' || booking.status === 'CONFIRMED') && start > now) {
+      return { text: t('bookings.pickupIn', { when: formatRelative(booking.startDate, language, now) }), overdue: false }
+    }
+    if (booking.status === 'PICKED_UP') {
+      return end > now
+        ? { text: t('bookings.returnIn', { when: formatRelative(booking.endDate, language, now) }), overdue: false }
+        : { text: t('bookings.returnOverdue'), overdue: true }
+    }
+    return null
+  }
+
   const tabs: Tab[] = ['upcoming', 'past', 'cancelled']
 
   return (
@@ -196,6 +240,8 @@ export function MyBookingsPage() {
                 booking.status === 'CONFIRMED' && !canCancel && new Date(booking.startDate).getTime() > now
               const canReview = booking.status === 'COMPLETED' && !booking.reviewed
               const hasCode = booking.handoverCode !== null
+              const when = timing(booking)
+              const canAddToCalendar = booking.status === 'CONFIRMED' || booking.status === 'PICKED_UP'
               const canSayLate =
                 booking.status === 'CONFIRMED' &&
                 !booking.runningLate &&
@@ -223,6 +269,18 @@ export function MyBookingsPage() {
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-1.5">
+                        {when && (
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold ${
+                              when.overdue
+                                ? 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300'
+                                : 'bg-surface-muted text-text'
+                            }`}
+                          >
+                            <Hourglass className="size-3.5" aria-hidden />
+                            {when.text}
+                          </span>
+                        )}
                         {booking.lateCancellation && (
                           <span className="inline-block rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900 dark:bg-amber-950 dark:text-amber-200">
                             {t('bookings.lateCancelled')}
@@ -302,12 +360,18 @@ export function MyBookingsPage() {
                       </p>
                     )}
 
-                    {(hasCode || canSayLate || canCancel || canReview || booking.reviewed) && (
+                    {(hasCode || canAddToCalendar || canSayLate || canCancel || canReview || booking.reviewed) && (
                       <div className="mt-auto flex flex-wrap gap-2 border-t border-border pt-4">
                         {hasCode && (
                           <Button className="h-10" onClick={() => setShowingCode(booking)}>
                             <QrCode className="size-4" aria-hidden />
                             {t(booking.status === 'PICKED_UP' ? 'handover.return.show' : 'handover.pickup.show')}
+                          </Button>
+                        )}
+                        {canAddToCalendar && (
+                          <Button variant="secondary" className="h-10" onClick={() => addToCalendar(booking)}>
+                            <CalendarPlus className="size-4" aria-hidden />
+                            {t('bookings.addToCalendar')}
                           </Button>
                         )}
                         {canSayLate && (

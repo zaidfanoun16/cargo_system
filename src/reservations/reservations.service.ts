@@ -115,6 +115,15 @@ export class ReservationsService {
     },
   ) {
 
+    // Staff do not rent cars for themselves: they book for customers
+    // from the office (walkIn)
+    if (currentUser.role === 'ADMIN') {
+      throw new ForbiddenException(
+        'Admins cannot make reservations for themselves',
+      );
+    }
+
+
     // Too many late cancellations or no-shows (see reservation-policy.ts)
     const user = await this.usersRepository.findOne({
       where: {
@@ -129,23 +138,18 @@ export class ReservationsService {
     }
 
 
-    // So one person cannot hold many cars "just in case". Staff booking
-    // for customers are not limited.
-    if (currentUser.role !== 'ADMIN') {
+    // So one person cannot hold many cars "just in case"
+    const activeReservations = await this.reservationsRepository.count({
+      where: {
+        userId: currentUser.userId,
+        status: In(ACTIVE_STATUSES),
+      },
+    });
 
-      const activeReservations = await this.reservationsRepository.count({
-        where: {
-          userId: currentUser.userId,
-          status: In(ACTIVE_STATUSES),
-        },
-      });
-
-      if (activeReservations >= MAX_ACTIVE_RESERVATIONS) {
-        throw new BadRequestException(
-          `You can have at most ${MAX_ACTIVE_RESERVATIONS} active reservations`,
-        );
-      }
-
+    if (activeReservations >= MAX_ACTIVE_RESERVATIONS) {
+      throw new BadRequestException(
+        `You can have at most ${MAX_ACTIVE_RESERVATIONS} active reservations`,
+      );
     }
 
 

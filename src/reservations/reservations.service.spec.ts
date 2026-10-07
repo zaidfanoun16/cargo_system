@@ -1100,12 +1100,13 @@ describe('ReservationsService', () => {
       });
     });
 
-    it('does not limit staff booking for customers', async () => {
-      reservationsRepository.count.mockResolvedValue(5);
+    it('refuses bookings from staff accounts', async () => {
+      reservationsRepository.count.mockResolvedValue(0);
 
       await expect(
         service.create(period, { ...currentUser, role: 'ADMIN' }),
-      ).resolves.toMatchObject({ userId: 1 });
+      ).rejects.toThrow('Admins cannot make reservations for themselves');
+      expect(reservationsRepository.save).not.toHaveBeenCalled();
     });
 
     it('must start at least 2 hours from now', async () => {

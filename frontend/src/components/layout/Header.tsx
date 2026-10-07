@@ -51,7 +51,13 @@ export function Header() {
   const confirm = useConfirm()
   const toast = useToast()
 
-  const navLinks = user ? [...links, { to: '/my-bookings', key: 'nav.myBookings' } as const] : links
+  // Admins work from the dashboard only; customers also get their bookings
+  const navLinks =
+    user?.role === 'ADMIN'
+      ? [{ to: '/admin', key: 'nav.admin' } as const]
+      : user
+        ? [...links, { to: '/my-bookings', key: 'nav.myBookings' } as const]
+        : links
 
   async function confirmLogout() {
     setMenuOpen(false)
@@ -85,7 +91,7 @@ export function Header() {
         {/* Desktop navigation */}
         <nav className="hidden items-center gap-1 md:flex">
           {navLinks.map((link) => (
-            <NavLink key={link.to} to={link.to} end className={navLinkClass}>
+            <NavLink key={link.to} to={link.to} end={link.to !== '/admin'} className={navLinkClass}>
               {t(link.key)}
             </NavLink>
           ))}
@@ -130,7 +136,7 @@ export function Header() {
         <div id="mobile-menu" className="border-t border-border bg-surface md:hidden">
           <Container className="flex flex-col gap-1 py-3">
             {navLinks.map((link) => (
-              <NavLink key={link.to} to={link.to} end className={navLinkClass} onClick={closeMenu}>
+              <NavLink key={link.to} to={link.to} end={link.to !== '/admin'} className={navLinkClass} onClick={closeMenu}>
                 {t(link.key)}
               </NavLink>
             ))}

@@ -11,7 +11,6 @@ import { useFetch } from '../../hooks/useFetch'
 import { useToast } from '../../hooks/useToast'
 import { ApiError } from '../../lib/api'
 import { type Car, type CarsPage, carName, categoryDescription, categoryName, colorName } from '../../lib/cars'
-import { toDateInput } from '../../lib/dates'
 import { formatNumber, formatPrice } from '../../lib/format'
 import { AvailabilityCalendar } from './AvailabilityCalendar'
 import { BookingBox } from './BookingBox'
@@ -55,12 +54,10 @@ export function CarDetailsPage() {
     }
   }
 
-  // A free time picked on the calendar starts a new booking there
-  const [picked, setPicked] = useState<{ start: Date; end: Date }>()
-  function pick(start: Date, end: Date) {
-    setPicked({ start, end })
-    document.getElementById('booking')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
+  // A day tapped on the calendar becomes the pickup time, and the period
+  // chosen in the booking box is shown on the calendar
+  const [picked, setPicked] = useState<Date>()
+  const [period, setPeriod] = useState<{ start: number; end: number } | null>(null)
   const current = car?.id === carId ? car : undefined
 
   // Back to the list with the same dates
@@ -138,8 +135,25 @@ export function CarDetailsPage() {
               {t(`booking.unavailable.${current.status === 'MAINTENANCE' ? 'maintenance' : 'inactive'}`)}
             </p>
           )}
+        </div>
 
-          <dl className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {/* Beside the photos on large screens, under the title on phones:
+            first when the car is free, then the booking */}
+        <div id="booking" className="grid scroll-mt-20 gap-4 lg:col-start-2 lg:row-span-4 lg:row-start-1">
+          <AvailabilityCalendar carId={current.id} onPick={setPicked} period={period} />
+          <BookingBox
+            car={current}
+            initialStart={params.get('startDate')}
+            initialEnd={params.get('endDate')}
+            pick={picked}
+            onPeriodChange={setPeriod}
+          />
+        </div>
+
+        {/* The details: under the title on large screens, after the
+            booking on phones so the calendar comes first there */}
+        <div className="lg:col-start-1">
+          <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Spec icon={<Calendar className="size-5" aria-hidden />} label={t('car.year')} value={formatNumber(current.year, language)} />
             <Spec icon={<Palette className="size-5" aria-hidden />} label={t('car.color')} value={colorName(current, language)} />
             <Spec icon={<Tag className="size-5" aria-hidden />} label={t('car.pricePerDay')} value={formatPrice(current.pricePerDay, language)} />
@@ -153,21 +167,7 @@ export function CarDetailsPage() {
           {description && <p className="mt-5 leading-relaxed text-muted">{description}</p>}
         </div>
 
-        {/* Beside the photos on large screens, under the title on phones */}
-        <div id="booking" className="scroll-mt-20 lg:sticky lg:top-20 lg:col-start-2 lg:row-span-3 lg:row-start-1">
-          <BookingBox
-            // A new pick starts the booking box again from that time
-            key={picked ? picked.start.toISOString() : 'search'}
-            car={current}
-            initialStart={picked ? toDateInput(picked.start) : params.get('startDate')}
-            initialEnd={picked ? toDateInput(picked.end) : params.get('endDate')}
-            initialHour={picked?.start.getHours()}
-            initialReturnHour={picked?.end.getHours()}
-          />
-        </div>
-
-        <div className="grid gap-6 lg:col-start-1">
-          <AvailabilityCalendar carId={current.id} onPick={pick} />
+        <div className="lg:col-start-1">
           <Reviews carId={current.id} />
         </div>
       </div>

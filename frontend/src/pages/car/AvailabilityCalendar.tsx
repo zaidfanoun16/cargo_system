@@ -1,8 +1,7 @@
-import { CalendarPlus, ChevronLeft, ChevronRight, Wrench } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Wrench } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { Button } from '../../components/ui/Button'
 import { useFetch } from '../../hooks/useFetch'
 import type { Availability } from '../../lib/cars'
 import { formatTime, toDateInput } from '../../lib/dates'
@@ -11,6 +10,9 @@ const HOUR = 60 * 60 * 1000
 
 // Same as the server: a booking starts at least this many hours from now
 const MIN_LEAD_HOURS = 2
+
+// Same as the booking box's starting pickup time
+const DEFAULT_PICKUP_HOUR = 10
 
 type Range = { start: number; end: number }
 
@@ -69,17 +71,10 @@ function describeDay(date: Date, periods: Range[], now: number): Day {
 }
 
 const cellStyles: Record<DayState, string> = {
-  free: 'bg-emerald-50 text-emerald-900 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-200 dark:hover:bg-emerald-950/70',
-  partial: 'bg-amber-50 text-amber-900 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-200 dark:hover:bg-amber-950/70',
-  full: 'bg-red-50 text-red-800/70 line-through hover:bg-red-100 dark:bg-red-950/40 dark:text-red-300/70',
+  free: 'bg-emerald-100 text-emerald-900 hover:bg-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-200 dark:hover:bg-emerald-900/60',
+  partial: 'bg-amber-100 text-amber-900 hover:bg-amber-200 dark:bg-amber-950/60 dark:text-amber-200 dark:hover:bg-amber-900/60',
+  full: 'bg-red-100 text-red-800/60 line-through dark:bg-red-950/50 dark:text-red-300/60',
   past: 'text-muted/40',
-}
-
-const badgeStyles: Record<DayState, string> = {
-  free: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200',
-  partial: 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200',
-  full: 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300',
-  past: 'bg-surface-muted text-muted',
 }
 
 const dotStyles: Record<DayState, string> = {
@@ -91,14 +86,17 @@ const dotStyles: Record<DayState, string> = {
 
 type Props = {
   carId: number
-  // Start a booking at this time, returning at the latest by `end`
-  onPick?: (start: Date, end: Date) => void
+  // Use this as the pickup time (the first free hour of a tapped day)
+  onPick?: (start: Date) => void
+  // The period being booked, outlined on the calendar
+  period?: { start: number; end: number } | null
 }
 
-// A month of days coloured by how free the car is (all day, part of the
-// day, or not at all). Choosing a day shows its hours on a 24-hour bar and
-// the free times in words, with a button to book from the first free hour.
-export function AvailabilityCalendar({ carId, onPick }: Props) {
+// A small month where each day is green (free all day), amber (free for
+// part of the day) or red (booked). Tapping a day makes it the pickup day
+// and says in words which hours are free; the period being booked is
+// outlined.
+export function AvailabilityCalendar({ carId, onPick, period }: Props) {
   const { t, i18n } = useTranslation()
   const language = i18n.language
   const locale = language === 'ar' ? 'ar-EG' : 'en-US'
@@ -106,15 +104,15 @@ export function AvailabilityCalendar({ carId, onPick }: Props) {
   const [now] = useState(() => Date.now())
   const today = new Date(now)
   const [month, setMonth] = useState(new Date(today.getFullYear(), today.getMonth(), 1))
-  const [selected, setSelected] = useState(() => toDateInput(today))
+  const [selected, setSelected] = useState<string>()
   const monthKey = toDateInput(month).slice(0, 7)
   const isCurrentMonth = month.getFullYear() === today.getFullYear() && month.getMonth() === today.getMonth()
 
   const availability = useFetch<Availability>(`/cars/${carId}/availability?month=${monthKey}`)
   const data = availability.data?.month === monthKey ? availability.data : undefined
-  const periods: Range[] = (data?.bookedPeriods ?? []).map((period) => ({
-    start: new Date(period.startDate).getTime(),
-    end: new Date(period.endDate).getTime(),
+  const periods: Range[] = (data?.bookedPeriods ?? []).map((booked) => ({
+    start: new Date(booked.startDate).getTime(),
+    end: new Date(booked.endDate).getTime(),
   }))
   const unavailable = data && data.carStatus !== 'AVAILABLE' ? data.carStatus : null
 
@@ -129,11 +127,8 @@ export function AvailabilityCalendar({ carId, onPick }: Props) {
   const chosen = days.find((item) => item.key === selected)
 
   const moveMonth = (step: number) => {
-    const next = new Date(month.getFullYear(), month.getMonth() + step, 1)
-    setMonth(next)
-    // Select today in this month, or its first day
-    const inNext = today.getFullYear() === next.getFullYear() && today.getMonth() === next.getMonth()
-    setSelected(toDateInput(inNext ? today : next))
+    setMonth(new Date(month.getFullYear(), month.getMonth() + step, 1))
+    setSelected(undefined)
   }
 
   // Midnight reads "midnight", not "12:00 AM"
@@ -142,50 +137,57 @@ export function AvailabilityCalendar({ carId, onPick }: Props) {
     return date.getHours() === 0 && date.getMinutes() === 0 ? t('calendar.midnight') : formatTime(date, language)
   }
 
-  // Book from the first free hour of the day: a day long, or until the
-  // next booking if that comes sooner
-  function pickDay(day: Day) {
-    const start = day.free[0].start
-    const nextBooking = Math.min(...periods.filter((period) => period.start >= start).map((period) => period.start))
-    onPick?.(new Date(start), new Date(Math.min(start + 24 * HOUR, nextBooking)))
+  // Pick up at the hour already chosen (10:00 at first) when it is free
+  // that day, otherwise at the day's first free hour
+  function pickupTime(day: Day) {
+    const hour = period ? new Date(period.start).getHours() : DEFAULT_PICKUP_HOUR
+    const date = new Date(day.start)
+    const preferred = new Date(date.getFullYear(), date.getMonth(), date.getDate(), hour).getTime()
+    const fits = day.free.some((range) => preferred >= range.start && preferred + HOUR <= range.end)
+    return fits ? preferred : day.free[0].start
   }
+
+  function choose(key: string, day: Day) {
+    setSelected(key)
+    if (!unavailable && day.free.length > 0) onPick?.(new Date(pickupTime(day)))
+  }
+
   const dayName = (date: Date) => new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long' }).format(date)
+  const inPeriod = (day: Day) => Boolean(period && period.start < day.end && period.end > day.start)
 
   return (
-    <section className="rounded-3xl border border-border bg-surface p-5 sm:p-6" aria-labelledby="calendar-title">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 id="calendar-title" className="text-lg font-extrabold">
-            {t('car.availability')}
-          </h2>
-          <p className="text-xs text-muted">{t('calendar.hint')}</p>
-        </div>
-        <div className="flex items-center gap-1">
+    <section className="rounded-3xl border border-border bg-surface p-4 sm:p-5" aria-labelledby="calendar-title">
+      <div className="flex items-center justify-between gap-2">
+        <h2 id="calendar-title" className="font-extrabold">
+          {t('car.availability')}
+        </h2>
+        <div className="flex items-center gap-0.5">
           <button
             type="button"
             onClick={() => moveMonth(-1)}
             disabled={isCurrentMonth}
-            className="grid size-9 place-items-center rounded-xl hover:bg-surface-muted disabled:opacity-30"
+            className="grid size-8 place-items-center rounded-lg hover:bg-surface-muted disabled:opacity-30"
             aria-label={t('car.previousMonth')}
           >
-            <ChevronLeft className="size-5 rtl:rotate-180" aria-hidden />
+            <ChevronLeft className="size-4 rtl:rotate-180" aria-hidden />
           </button>
-          <p className="min-w-32 text-center text-sm font-bold" aria-live="polite">
+          <p className="min-w-28 text-center text-sm font-bold" aria-live="polite">
             {new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(month)}
           </p>
           <button
             type="button"
             onClick={() => moveMonth(1)}
-            className="grid size-9 place-items-center rounded-xl hover:bg-surface-muted"
+            className="grid size-8 place-items-center rounded-lg hover:bg-surface-muted"
             aria-label={t('car.nextMonth')}
           >
-            <ChevronRight className="size-5 rtl:rotate-180" aria-hidden />
+            <ChevronRight className="size-4 rtl:rotate-180" aria-hidden />
           </button>
         </div>
       </div>
+      <p className="mt-0.5 text-xs text-muted">{t('calendar.hint')}</p>
 
       {unavailable && (
-        <p className="mt-4 flex items-center gap-2 rounded-2xl bg-amber-100 p-3 text-sm font-semibold text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+        <p className="mt-3 flex items-center gap-2 rounded-xl bg-amber-100 p-2.5 text-xs font-semibold text-amber-900 dark:bg-amber-950 dark:text-amber-200">
           <Wrench className="size-4 shrink-0" aria-hidden />
           {t(`booking.unavailable.${unavailable === 'MAINTENANCE' ? 'maintenance' : 'inactive'}`)}
         </p>
@@ -193,12 +195,12 @@ export function AvailabilityCalendar({ carId, onPick }: Props) {
 
       {/* The month */}
       <div
-        className={`mt-4 grid grid-cols-7 gap-1 text-center transition-opacity sm:gap-1.5 ${availability.loading || !data ? 'opacity-50' : ''}`}
+        className={`mt-3 grid grid-cols-7 gap-1 text-center transition-opacity ${availability.loading || !data ? 'opacity-50' : ''}`}
         role="grid"
         aria-label={t('car.availability')}
       >
         {Array.from({ length: 7 }, (_, index) => (
-          <span key={index} className="pb-1 text-[11px] font-bold text-muted sm:text-xs" aria-hidden>
+          <span key={index} className="pb-0.5 text-[10px] font-bold text-muted" aria-hidden>
             {language === 'ar' ? weekdayNames.ar[index] : weekdayNames.en[index]}
           </span>
         ))}
@@ -207,139 +209,70 @@ export function AvailabilityCalendar({ carId, onPick }: Props) {
         ))}
         {days.map(({ key, date, day }) => {
           const state: DayState = unavailable && day.state !== 'past' ? 'full' : day.state
+          const booking = state !== 'past' && inPeriod(day)
           return (
             <button
               key={key}
               type="button"
-              disabled={state === 'past'}
-              onClick={() => setSelected(key)}
+              disabled={state === 'past' || state === 'full'}
+              onClick={() => choose(key, day)}
               aria-pressed={selected === key}
               aria-label={`${dayName(date)}: ${t(`calendar.states.${state}`)}`}
-              className={`flex h-11 flex-col items-center justify-center rounded-xl text-sm font-bold transition-colors disabled:cursor-default sm:h-12 ${cellStyles[state]} ${
-                selected === key ? 'ring-2 ring-primary ring-offset-1 ring-offset-surface' : ''
-              } ${key === toDateInput(today) ? 'border-2 border-primary/50' : ''}`}
+              className={`grid h-9 place-items-center rounded-lg text-xs font-bold transition-colors disabled:cursor-default sm:text-sm ${cellStyles[state]} ${
+                booking ? 'ring-2 ring-primary ring-inset' : ''
+              } ${selected === key ? 'outline-2 outline-offset-1 outline-primary' : ''} ${
+                key === toDateInput(today) ? 'underline decoration-2 underline-offset-4' : ''
+              }`}
             >
               {date.toLocaleDateString(locale, { day: 'numeric' })}
-              <span className={`mt-0.5 size-1.5 rounded-full ${dotStyles[state]}`} aria-hidden />
             </button>
           )
         })}
       </div>
 
       {/* What the colors mean */}
-      <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted">
+      <ul className="mt-3 flex flex-wrap gap-x-3 gap-y-1.5 text-[11px] text-muted">
         {(['free', 'partial', 'full'] as const).map((state) => (
           <li key={state} className="inline-flex items-center gap-1.5">
             <span className={`size-2.5 rounded-full ${dotStyles[state]}`} aria-hidden />
             {t(`calendar.legend.${state}`)}
           </li>
         ))}
+        {period && (
+          <li className="inline-flex items-center gap-1.5">
+            <span className="size-2.5 rounded-sm ring-2 ring-primary" aria-hidden />
+            {t('calendar.legend.yourBooking')}
+          </li>
+        )}
       </ul>
 
-      {/* The chosen day, hour by hour */}
-      {chosen && chosen.day.state !== 'past' && data && (
-        <div className="mt-5 rounded-2xl border border-border p-4" aria-live="polite">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="font-extrabold">{dayName(chosen.date)}</p>
-            <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${badgeStyles[unavailable ? 'full' : chosen.day.state]}`}>
-              <span className={`size-2 rounded-full ${dotStyles[unavailable ? 'full' : chosen.day.state]}`} aria-hidden />
-              {t(`calendar.states.${unavailable ? 'full' : chosen.day.state}`)}
-            </span>
-          </div>
-
-          <DayBar day={chosen.day} language={language} />
-
-          {!unavailable && (
-            <div className="mt-4 space-y-2 text-sm">
-              {chosen.day.free.length > 0 && (
-                <p>
-                  <span className="font-bold text-emerald-700 dark:text-emerald-400">{t('calendar.freeTimes')}: </span>
-                  {chosen.day.free
-                    .map((range) => t('calendar.fromTo', { from: time(range.start), to: time(range.end) }))
-                    .join(t('calendar.and'))}
-                </p>
-              )}
+      {/* The tapped day, in words */}
+      {chosen && data && (
+        <div className="mt-3 rounded-2xl bg-surface-muted p-3 text-xs leading-relaxed" aria-live="polite">
+          <p className="font-extrabold">{dayName(chosen.date)}</p>
+          {unavailable ? null : chosen.day.free.length === 0 ? (
+            <p className="text-muted">{t('calendar.noFree')}</p>
+          ) : (
+            <>
+              <p>
+                <span className="font-bold text-emerald-700 dark:text-emerald-400">{t('calendar.freeTimes')}: </span>
+                {chosen.day.free
+                  .map((range) => t('calendar.fromTo', { from: time(range.start), to: time(range.end) }))
+                  .join(t('calendar.and'))}
+              </p>
               {chosen.day.booked.length > 0 && (
                 <p>
                   <span className="font-bold text-red-700 dark:text-red-400">{t('calendar.bookedTimes')}: </span>
                   {chosen.day.booked
-                    .map((range) =>
-                      range.start <= chosen.day.start && range.end >= chosen.day.end
-                        ? t('calendar.allDay')
-                        : t('calendar.fromTo', { from: time(range.start), to: time(range.end) }),
-                    )
+                    .map((range) => t('calendar.fromTo', { from: time(range.start), to: time(range.end) }))
                     .join(t('calendar.and'))}
                 </p>
               )}
-              {chosen.day.free.length === 0 && <p className="text-muted">{t('calendar.noFree')}</p>}
-            </div>
-          )}
-
-          {onPick && !unavailable && chosen.day.free.length > 0 && (
-            <Button
-              className="mt-4 h-11 w-full sm:w-auto"
-              onClick={() => pickDay(chosen.day)}
-            >
-              <CalendarPlus className="size-4" aria-hidden />
-              {t('calendar.bookFrom', { time: time(chosen.day.free[0].start) })}
-            </Button>
+              {onPick && <p className="mt-1 font-semibold text-muted">{t('calendar.pickedAsPickup', { time: time(pickupTime(chosen.day)) })}</p>}
+            </>
           )}
         </div>
       )}
     </section>
-  )
-}
-
-// 24 hours from midnight to midnight: booked in red, free in green, and
-// the part that can no longer be booked in grey
-function DayBar({ day, language }: { day: Day; language: string }) {
-  const { t } = useTranslation()
-  const length = day.end - day.start
-  const at = (value: number) => ((value - day.start) / length) * 100
-
-  const segment = (range: Range, className: string, key: string) => (
-    <span
-      key={key}
-      className={`absolute inset-y-0 ${className}`}
-      style={{ insetInlineStart: `${at(range.start)}%`, width: `${at(range.end) - at(range.start)}%` }}
-    />
-  )
-
-  return (
-    <div className="mt-4" aria-hidden>
-      <div className="relative h-4 overflow-hidden rounded-full bg-surface-muted">
-        {day.free.map((range, index) => segment(range, 'bg-emerald-500', `free-${index}`))}
-        {day.booked.map((range, index) => segment(range, 'bg-red-500', `booked-${index}`))}
-        {day.bookableFrom > day.start &&
-          segment({ start: day.start, end: day.bookableFrom }, 'bg-[repeating-linear-gradient(45deg,transparent_0_4px,rgb(0_0_0/0.08)_4px_8px)]', 'past')}
-      </div>
-      <div className="relative mt-1 h-4 text-[10px] font-semibold text-muted">
-        {[0, 6, 12, 18, 24].map((hour) => (
-          <span
-            key={hour}
-            className={`absolute top-0 whitespace-nowrap ${hour === 0 ? '' : hour === 24 ? '-translate-x-full rtl:translate-x-full' : '-translate-x-1/2 rtl:translate-x-1/2'}`}
-            style={{ insetInlineStart: `${(hour / 24) * 100}%` }}
-          >
-            {new Intl.DateTimeFormat(language === 'ar' ? 'ar-EG' : 'en-US', { hour: 'numeric' }).format(new Date(2000, 0, 1, hour % 24))}
-          </span>
-        ))}
-      </div>
-      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted">
-        <span className="inline-flex items-center gap-1">
-          <span className="h-2 w-3 rounded-sm bg-emerald-500" />
-          {t('calendar.legend.freeHours')}
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="h-2 w-3 rounded-sm bg-red-500" />
-          {t('calendar.legend.bookedHours')}
-        </span>
-        {day.bookableFrom > day.start && (
-          <span className="inline-flex items-center gap-1">
-            <span className="h-2 w-3 rounded-sm bg-surface-muted ring-1 ring-border" />
-            {t('calendar.legend.tooSoon')}
-          </span>
-        )}
-      </div>
-    </div>
   )
 }

@@ -1,5 +1,5 @@
-import { CalendarCheck, CalendarDays, CircleAlert, Clock, Minus, Plus, Timer } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { CalendarCheck, CircleAlert, Clock } from 'lucide-react'
+import { type ReactNode, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation } from 'react-router-dom'
 
@@ -21,20 +21,6 @@ const MIN_LEAD_HOURS = 2
 const DEFAULT_HOUR = 10
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour)
 
-// Quick choices for the length of the rental
-const DAY_CHOICES = [1, 3, 7, 30]
-const HOUR_CHOICES = [2, 4, 6, 8, 12]
-const MAX_DAYS = 90
-// From a full day on, a rental is booked by the day
-const MAX_HOURS = 23
-// Same as the server: long rentals cost less (days → percent off)
-const DAY_DISCOUNTS: [number, number][] = [
-  [30, 20],
-  [7, 10],
-]
-
-type Mode = 'days' | 'hours'
-
 const fieldClass =
   'h-11 w-full rounded-xl border border-border bg-bg px-3 text-sm text-text focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20'
 
@@ -43,21 +29,14 @@ type Props = {
   // Dates chosen on the cars page, used as the starting period
   initialStart: string | null
   initialEnd: string | null
-  // A pickup time chosen on the availability calendar
-  pick?: Date
-  // Tells the calendar which period is being booked, to show it there
-  onPeriodChange?: (period: { start: number; end: number } | null) => void
+  // Pickup and return hours picked on the availability calendar
+  initialHour?: number
+  initialReturnHour?: number
 }
 
-// Whole days from the pickup day to the return day (at least 1)
-function daysBetween(start: string, end: string) {
-  return Math.max(1, Math.round((atHour(end, 12).getTime() - atHour(start, 12).getTime()) / (24 * 60 * 60 * 1000)))
-}
-
-// Choose "by the day" or "by the hour", then only what that needs: the
-// pickup day and time and how many days (or hours). The return time
-// follows from them. Prices come from the server, never calculated here.
-export function BookingBox({ car, initialStart, initialEnd, pick, onPeriodChange }: Props) {
+// Pick the period, see the exact price (the same the booking will cost),
+// then book. Prices come from the server, never calculated here.
+export function BookingBox({ car, initialStart, initialEnd, initialHour, initialReturnHour }: Props) {
   const { t, i18n } = useTranslation()
   const language = i18n.language
   const { user } = useAuth()
@@ -65,28 +44,20 @@ export function BookingBox({ car, initialStart, initialEnd, pick, onPeriodChange
   const toast = useToast()
   const location = useLocation()
 
-  const hourly = car.pricePerHour !== null
   const tomorrow = toDateInput(addDays(new Date(), 1))
   const today = toDateInput(new Date())
   const startFromSearch = isValidDateInput(initialStart) && initialStart >= today ? initialStart : tomorrow
-  const daysFromSearch =
-    isValidDateInput(initialEnd) && initialEnd > startFromSearch ? daysBetween(startFromSearch, initialEnd) : 1
+  const endFromSearch =
+    isValidDateInput(initialEnd) &&
+    // A time picked on the calendar can end the same day
+    (initialEnd > startFromSearch || (initialReturnHour !== undefined && initialEnd === startFromSearch))
+      ? initialEnd
+      : toDateInput(addDays(atHour(startFromSearch, 0), 3))
 
-  const [mode, setMode] = useState<Mode>('days')
   const [pickupDate, setPickupDate] = useState(startFromSearch)
-  const [pickupHour, setPickupHour] = useState(DEFAULT_HOUR)
-  const [days, setDays] = useState(Math.min(daysFromSearch, MAX_DAYS))
-  const [hours, setHours] = useState(4)
-
-  // A time picked on the calendar becomes the pickup time
-  const [seenPick, setSeenPick] = useState(pick)
-  if (pick !== seenPick) {
-    setSeenPick(pick)
-    if (pick) {
-      setPickupDate(toDateInput(pick))
-      setPickupHour(pick.getHours())
-    }
-  }
+  const [pickupHour, setPickupHour] = useState(initialHour ?? DEFAULT_HOUR)
+  const [returnDate, setReturnDate] = useState(endFromSearch)
+  const [returnHour, setReturnHour] = useState(initialReturnHour ?? DEFAULT_HOUR)
 
   // Read once: the server checks the time again when booking
   const [openedAt] = useState(() => Date.now())
@@ -95,26 +66,16 @@ export function BookingBox({ car, initialStart, initialEnd, pick, onPeriodChange
   const [bookError, setBookError] = useState<string>()
   const [booked, setBooked] = useState<{ totalPrice: number }>()
 
-  const byHour = mode === 'hours' && hourly
   const start = isValidDateInput(pickupDate) ? atHour(pickupDate, pickupHour) : null
-  const end = start
-    ? byHour
-      ? new Date(start.getTime() + hours * 60 * 60 * 1000)
-      : new Date(start.getFullYear(), start.getMonth(), start.getDate() + days, pickupHour)
-    : null
+  const end = isValidDateInput(returnDate) ? atHour(returnDate, returnHour) : null
 
   // Same rules as the server, checked first so mistakes show at once
   let periodError: string | undefined
   if (!start || !end) periodError = 'errors.required'
   else if (start.getTime() <= openedAt) periodError = 'errors.pastDates'
   else if (start.getTime() - openedAt < MIN_LEAD_HOURS * 60 * 60 * 1000) periodError = 'errors.minLead'
-
-  // Show the chosen period on the calendar
-  const startTime = start?.getTime()
-  const endTime = end?.getTime()
-  useEffect(() => {
-    onPeriodChange?.(startTime && endTime ? { start: startTime, end: endTime } : null)
-  }, [startTime, endTime, onPeriodChange])
+  else if (end <= start) periodError = 'errors.endBeforeStart'
+  else if (end.getTime() - start.getTime() < MIN_HOURS * 60 * 60 * 1000) periodError = 'errors.minHours'
 
   const quotePath =
     start && end && !periodError
@@ -131,7 +92,6 @@ export function BookingBox({ car, initialStart, initialEnd, pick, onPeriodChange
     if (!start || !end || !current) return
 
     // Show exactly what is being booked before sending it
-    const confirmingAt = new Date().getTime()
     const when = (date: Date) => formatDate(date, language, { weekday: 'short', hour: 'numeric', minute: '2-digit' })
     const confirmed = await confirm({
       title: t('booking.confirmTitle'),
@@ -143,7 +103,7 @@ export function BookingBox({ car, initialStart, initialEnd, pick, onPeriodChange
             <SummaryRow label={t('booking.return')} value={when(end)} />
             <SummaryRow label={t('booking.total')} value={formatPrice(current.totalPrice, language)} strong />
           </dl>
-          <PolicySummary quote={current} now={confirmingAt} />
+          <PolicySummary quote={current} now={Date.now()} />
         </>
       ),
       acknowledge: t('booking.acceptPolicy'),
@@ -194,108 +154,65 @@ export function BookingBox({ car, initialStart, initialEnd, pick, onPeriodChange
     </option>
   ))
 
-  const durationDays = current ? Math.floor(current.hours / 24) : 0
-  const durationHours = current ? current.hours % 24 : 0
+  const days = current ? Math.floor(current.hours / 24) : 0
+  const hours = current ? current.hours % 24 : 0
   const discount = current ? Math.round((current.basePrice - current.totalPrice) * 100) / 100 : 0
-  const when = (date: Date) => formatDate(date, language, { weekday: 'long', hour: 'numeric', minute: '2-digit' })
 
   return (
     <div className="rounded-3xl border border-border bg-surface p-5 sm:p-6">
-      {/* The price for the chosen way of renting */}
       <p className="flex items-baseline gap-1.5">
-        <span className="text-2xl font-extrabold">
-          {formatPrice(byHour ? car.pricePerHour! : car.pricePerDay, language)}
-        </span>
-        <span className="text-sm text-muted">/ {t(byHour ? 'currency.perHour' : 'currency.perDay')}</span>
+        <span className="text-2xl font-extrabold">{formatPrice(car.pricePerDay, language)}</span>
+        <span className="text-sm text-muted">/ {t('currency.perDay')}</span>
       </p>
-
-      {/* By the day or by the hour */}
-      {hourly ? (
-        <div className="mt-4 grid grid-cols-2 gap-1 rounded-2xl bg-surface-muted p-1" role="radiogroup" aria-label={t('booking.modeLabel')}>
-          {(['days', 'hours'] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              role="radio"
-              aria-checked={mode === value}
-              onClick={() => setMode(value)}
-              className={`flex h-11 items-center justify-center gap-2 rounded-xl text-sm font-bold transition-colors ${
-                mode === value ? 'bg-surface text-text shadow-sm' : 'text-muted hover:text-text'
-              }`}
-            >
-              {value === 'days' ? <CalendarDays className="size-4" aria-hidden /> : <Timer className="size-4" aria-hidden />}
-              {t(`booking.mode.${value}`)}
-            </button>
-          ))}
-        </div>
-      ) : (
-        <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-surface-muted px-3 py-1 text-xs font-semibold text-muted">
-          <CalendarDays className="size-3.5" aria-hidden />
-          {t('booking.dailyOnly')}
+      {car.pricePerHour !== null && (
+        <p className="mt-1 text-sm text-muted">
+          {t('booking.orHourly', { price: formatPrice(car.pricePerHour, language) })}
         </p>
       )}
 
       <fieldset className="mt-5 space-y-4">
         <legend className="sr-only">{t('booking.period')}</legend>
-
-        <div className="grid grid-cols-[1fr_8rem] gap-2">
-          <label className="block">
-            <span className="mb-1.5 block text-sm font-semibold">{t('booking.pickupDay')}</span>
-            <input
-              type="date"
-              value={pickupDate}
-              min={today}
-              onChange={(event) => setPickupDate(event.target.value)}
-              className={fieldClass}
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1.5 block text-sm font-semibold">{t('booking.pickupTime')}</span>
-            <select value={pickupHour} onChange={(event) => setPickupHour(Number(event.target.value))} className={fieldClass}>
-              {hourOptions}
-            </select>
-          </label>
-        </div>
-
-        {byHour ? (
-          <Duration
-            label={t('booking.howManyHours')}
-            value={hours}
-            min={MIN_HOURS}
-            max={MAX_HOURS}
-            onChange={setHours}
-            choices={HOUR_CHOICES}
-            format={(count) => t('booking.hours', { count, formatted: formatNumber(count, language) })}
-          />
-        ) : (
-          <Duration
-            label={t('booking.howManyDays')}
-            value={days}
-            min={1}
-            max={MAX_DAYS}
-            onChange={setDays}
-            choices={DAY_CHOICES}
-            format={(count) => t('booking.days', { count, formatted: formatNumber(count, language) })}
-            badge={(count) => {
-              const percent = DAY_DISCOUNTS.find(([from]) => count >= from)?.[1]
-              return percent ? `−${formatNumber(percent, language)}${language === 'ar' ? '٪' : '%'}` : undefined
+        <PeriodRow label={t('booking.pickup')}>
+          <input
+            type="date"
+            value={pickupDate}
+            min={today}
+            onChange={(event) => {
+              const value = event.target.value
+              setPickupDate(value)
+              // Keep the return after the pickup
+              if (value && returnDate < value) setReturnDate(value)
             }}
+            className={fieldClass}
+            aria-label={t('booking.pickupDate')}
           />
-        )}
-
-        {!byHour && (
-          <p className="text-xs text-muted">
-            {t('booking.discountHint', { week: formatNumber(10, language), month: formatNumber(20, language) })}
-          </p>
-        )}
-
-        {/* The return follows from the pickup and the length */}
-        {end && (
-          <p className="flex items-center justify-between gap-2 rounded-2xl bg-surface-muted px-4 py-3 text-sm">
-            <span className="font-semibold text-muted">{t('booking.returnOn')}</span>
-            <span className="text-end font-bold">{when(end)}</span>
-          </p>
-        )}
+          <select
+            value={pickupHour}
+            onChange={(event) => setPickupHour(Number(event.target.value))}
+            className={fieldClass}
+            aria-label={t('booking.pickupTime')}
+          >
+            {hourOptions}
+          </select>
+        </PeriodRow>
+        <PeriodRow label={t('booking.return')}>
+          <input
+            type="date"
+            value={returnDate}
+            min={pickupDate || today}
+            onChange={(event) => setReturnDate(event.target.value)}
+            className={fieldClass}
+            aria-label={t('booking.returnDate')}
+          />
+          <select
+            value={returnHour}
+            onChange={(event) => setReturnHour(Number(event.target.value))}
+            className={fieldClass}
+            aria-label={t('booking.returnTime')}
+          >
+            {hourOptions}
+          </select>
+        </PeriodRow>
       </fieldset>
 
       <div className="mt-5 min-h-24 border-t border-border pt-4" aria-live="polite">
@@ -324,8 +241,8 @@ export function BookingBox({ car, initialStart, initialEnd, pick, onPeriodChange
               </dt>
               <dd>
                 {[
-                  durationDays > 0 && t('booking.days', { count: durationDays, formatted: formatNumber(durationDays, language) }),
-                  durationHours > 0 && t('booking.hours', { count: durationHours, formatted: formatNumber(durationHours, language) }),
+                  days > 0 && t('booking.days', { count: days, formatted: formatNumber(days, language) }),
+                  hours > 0 && t('booking.hours', { count: hours, formatted: formatNumber(hours, language) }),
                 ]
                   .filter(Boolean)
                   .join(t('booking.and'))}
@@ -382,79 +299,11 @@ export function BookingBox({ car, initialStart, initialEnd, pick, onPeriodChange
   )
 }
 
-// How many days or hours: − and + buttons, and quick choices
-function Duration({
-  label,
-  value,
-  min,
-  max,
-  onChange,
-  choices,
-  format,
-  badge,
-}: {
-  label: string
-  value: number
-  min: number
-  max: number
-  onChange: (value: number) => void
-  choices: number[]
-  format: (count: number) => string
-  badge?: (count: number) => string | undefined
-}) {
-  const { t, i18n } = useTranslation()
-  const stepClass =
-    'grid size-11 shrink-0 place-items-center rounded-xl border border-border bg-bg text-text transition-colors hover:bg-surface-muted disabled:opacity-40'
-
+function PeriodRow({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
       <p className="mb-1.5 text-sm font-semibold">{label}</p>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          className={stepClass}
-          onClick={() => onChange(Math.max(min, value - 1))}
-          disabled={value <= min}
-          aria-label={t('booking.less')}
-        >
-          <Minus className="size-4" aria-hidden />
-        </button>
-        <p className="flex h-11 flex-1 items-center justify-center rounded-xl border border-border bg-bg text-base font-extrabold" aria-live="polite">
-          {format(value)}
-        </p>
-        <button
-          type="button"
-          className={stepClass}
-          onClick={() => onChange(Math.min(max, value + 1))}
-          disabled={value >= max}
-          aria-label={t('booking.more')}
-        >
-          <Plus className="size-4" aria-hidden />
-        </button>
-      </div>
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        {choices.map((choice) => {
-          const extra = badge?.(choice)
-          return (
-            <button
-              key={choice}
-              type="button"
-              onClick={() => onChange(choice)}
-              aria-pressed={value === choice}
-              className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-bold transition-colors ${
-                value === choice ? 'border-primary bg-primary text-primary-fg' : 'border-border text-muted hover:text-text'
-              }`}
-            >
-              {formatNumber(choice, i18n.language)}
-              {extra && (
-                <span className={`rounded-full px-1.5 ${value === choice ? 'bg-primary-fg/20' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'}`}>
-                  {extra}
-                </span>
-              )}
-            </button>
-          )
-        })}
-      </div>
+      <div className="grid grid-cols-[1fr_auto] gap-2 [&>select]:w-32">{children}</div>
     </div>
   )
 }

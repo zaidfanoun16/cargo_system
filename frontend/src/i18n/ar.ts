@@ -230,19 +230,6 @@ const ar = {
     noReviews: 'لا توجد تقييمات بعد. يكتب العملاء تقييماتهم بعد انتهاء حجوزاتهم.',
   },
   booking: {
-    modeLabel: 'طريقة الحجز',
-    mode: {
-      days: 'باليوم',
-      hours: 'بالساعة',
-    },
-    dailyOnly: 'هذه السيارة تُؤجَّر باليوم فقط',
-    pickupDay: 'يوم الاستلام',
-    howManyDays: 'كم يوماً؟',
-    howManyHours: 'كم ساعة؟',
-    less: 'أقل',
-    more: 'أكثر',
-    discountHint: 'خصم {{week}}٪ من ٧ أيام، و{{month}}٪ من ٣٠ يوماً.',
-    returnOn: 'الإرجاع',
     car: 'السيارة',
     confirmTitle: 'تأكيد الحجز',
     confirmButton: 'نعم، احجز',
@@ -554,7 +541,7 @@ const ar = {
     next: 'حجز جديد',
   },
   calendar: {
-    hint: 'اضغط على يوم أخضر أو أصفر ليصبح يوم الاستلام.',
+    hint: 'اختر يوماً لترى ساعاته المتاحة.',
     today: 'اليوم',
     states: {
       free: 'متاح طوال اليوم',
@@ -566,7 +553,9 @@ const ar = {
       free: 'متاح طوال اليوم',
       partial: 'متاح بعض الساعات',
       full: 'محجوز بالكامل',
-      yourBooking: 'فترة حجزك',
+      freeHours: 'متاح',
+      bookedHours: 'محجوز',
+      tooSoon: 'مضى أو قريب جداً للحجز',
     },
     freeTimes: 'متاح',
     bookedTimes: 'محجوز',
@@ -575,7 +564,7 @@ const ar = {
     allDay: 'طوال اليوم',
     midnight: 'منتصف الليل',
     noFree: 'لا توجد ساعات متاحة في هذا اليوم. اختر يوماً آخر.',
-    pickedAsPickup: 'اخترنا {{time}} موعداً للاستلام. غيّر الساعة أو المدة من الأسفل.',
+    bookFrom: 'احجز من {{time}}',
   },
   reviews: {
     title: 'كيف كانت رحلتك؟',

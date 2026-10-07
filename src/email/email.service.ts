@@ -320,6 +320,8 @@ export type ReservationEmailDetails = {
   cancelledBy?: 'user' | 'admin' | 'system';
   // The customer cancelled after the free cancellation period
   lateCancellation?: boolean;
+  // The car came back more than RETURN_GRACE_HOURS after the return time
+  lateReturn?: boolean;
   // Code the customer shows at pickup (confirmed reservations)
   handoverCode?: string;
 };
@@ -426,7 +428,9 @@ function statusText(
       subject: 'اكتمل',
       badge: 'مكتمل',
       title: 'شكراً لاستئجارك من CarGo 🚗',
-      message: 'اكتمل حجزك، ونتمنى أن تكون رحلتك ممتعة.',
+      message: details.lateReturn
+        ? 'اكتمل حجزك. أُرجعت السيارة بعد موعد الإرجاع بأكثر من ساعة، لذلك احتُسب إرجاعاً متأخراً، وتكراره يوقف إمكانية الحجز.'
+        : 'اكتمل حجزك، ونتمنى أن تكون رحلتك ممتعة.',
       color: '#3f4a54',
       badgeBackground: '#e6e9ec',
       stepsTitle: 'شاركنا رأيك',

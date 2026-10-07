@@ -9,7 +9,7 @@ import { FormAlert } from '../../components/form/FormAlert'
 import { Button } from '../../components/ui/Button'
 import { useFetch } from '../../hooks/useFetch'
 import { useToast } from '../../hooks/useToast'
-import { whatsappLink } from '../../lib/admin'
+import { RETURN_WINDOW_HOURS, whatsappLink } from '../../lib/admin'
 import { api } from '../../lib/api'
 import { type Car, carName, colorName } from '../../lib/cars'
 import { formatDate } from '../../lib/dates'
@@ -162,9 +162,17 @@ export function AdminHandoverPage() {
   const dateTime = (value: string) => formatDate(value, language, { weekday: 'short', hour: 'numeric', minute: '2-digit' })
   const isReturn = handover?.mode === 'return'
   const tooEarly = handover && !isReturn ? new Date(handover.handoverFrom).getTime() > loadedAt : false
-  // Hours past the return time (0 when on time)
-  const lateHours =
-    handover && isReturn ? Math.max(0, Math.ceil((loadedAt - new Date(handover.endDate).getTime()) / (60 * 60 * 1000))) : 0
+  // Hours from the return time: early (more than an hour before), on
+  // time, or late (more than an hour after, a strike for the customer)
+  const hoursFromEnd = handover && isReturn ? (loadedAt - new Date(handover.endDate).getTime()) / (60 * 60 * 1000) : 0
+  const returnState = !isReturn
+    ? null
+    : hoursFromEnd > RETURN_WINDOW_HOURS
+      ? 'late'
+      : hoursFromEnd < -RETURN_WINDOW_HOURS
+        ? 'early'
+        : 'onTime'
+  const lateHours = Math.max(0, Math.ceil(hoursFromEnd))
 
   if (done) {
     return (
@@ -340,19 +348,21 @@ export function AdminHandoverPage() {
                   )}
                 </dl>
 
-                {isReturn && (
+                {returnState && (
                   <p
                     className={`rounded-2xl p-3 text-sm font-semibold ${
-                      lateHours > 0
+                      returnState === 'late'
                         ? 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200'
-                        : 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
+                        : returnState === 'early'
+                          ? 'bg-blue-50 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300'
+                          : 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
                     }`}
                   >
-                    {lateHours > 0
+                    {returnState === 'late'
                       ? t('handover.admin.return.late', {
                           duration: t('booking.hours', { count: lateHours, formatted: formatNumber(lateHours, language) }),
                         })
-                      : t('handover.admin.return.onTime')}
+                      : t(`handover.admin.return.${returnState}`)}
                   </p>
                 )}
 

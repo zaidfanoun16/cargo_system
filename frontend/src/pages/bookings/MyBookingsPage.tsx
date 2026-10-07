@@ -27,6 +27,7 @@ import { Container } from '../../components/ui/Container'
 import { useConfirm } from '../../hooks/useConfirm'
 import { useFetch } from '../../hooks/useFetch'
 import { useToast } from '../../hooks/useToast'
+import { returnTiming } from '../../lib/admin'
 import { api } from '../../lib/api'
 import { type Booking, carName } from '../../lib/cars'
 import { formatDate, formatRelative } from '../../lib/dates'
@@ -284,6 +285,17 @@ export function MyBookingsPage() {
                         {booking.lateCancellation && (
                           <span className="inline-block rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900 dark:bg-amber-950 dark:text-amber-200">
                             {t('bookings.lateCancelled')}
+                          </span>
+                        )}
+                        {returnTiming(booking) && (
+                          <span
+                            className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${
+                              returnTiming(booking) === 'late'
+                                ? 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200'
+                                : 'bg-surface-muted text-text'
+                            }`}
+                          >
+                            {t(`bookings.return.${returnTiming(booking)}`)}
                           </span>
                         )}
                         <StatusBadge status={booking.status} />

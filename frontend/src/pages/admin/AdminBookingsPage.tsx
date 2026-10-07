@@ -10,7 +10,7 @@ import { ScrollRow } from '../../components/ui/ScrollRow'
 import { useConfirm } from '../../hooks/useConfirm'
 import { useFetch } from '../../hooks/useFetch'
 import { useToast } from '../../hooks/useToast'
-import { type AdminBooking, whatsappLink } from '../../lib/admin'
+import { type AdminBooking, returnTiming, whatsappLink } from '../../lib/admin'
 import { api } from '../../lib/api'
 import { type BookingStatus, carName } from '../../lib/cars'
 import { formatDate, toDateInput } from '../../lib/dates'
@@ -210,6 +210,17 @@ export function AdminBookingsPage() {
                           {t('bookings.lateCancelled')}
                         </span>
                       )}
+                      {returnTiming(booking) && (
+                        <span
+                          className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${
+                            returnTiming(booking) === 'late'
+                              ? 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200'
+                              : 'bg-surface-muted text-text'
+                          }`}
+                        >
+                          {t(`bookings.return.${returnTiming(booking)}`)}
+                        </span>
+                      )}
                       <StatusBadge status={booking.status} />
                     </div>
                   </div>
@@ -318,11 +329,11 @@ export function AdminBookingsPage() {
   )
 }
 
-// Completed rentals, late cancellations and no-shows, so the admin can
+// Completed rentals, late cancellations, no-shows and late returns, so the admin can
 // decide whether to confirm a request
 function CustomerRecord({ user }: { user: AdminBooking['user'] }) {
   const { t, i18n } = useTranslation()
-  const { completed, lateCancellations, noShows } = user.record
+  const { completed, lateCancellations, noShows, lateReturns } = user.record
   const count = (value: number) => ({ formatted: formatNumber(value, i18n.language) })
   const chip = 'rounded-full px-2 py-0.5 text-xs font-bold'
 
@@ -334,7 +345,7 @@ function CustomerRecord({ user }: { user: AdminBooking['user'] }) {
           {t('admin.users.blocked')}
         </li>
       )}
-      {completed + lateCancellations + noShows === 0 ? (
+      {completed + lateCancellations + noShows + lateReturns === 0 ? (
         <li className={`${chip} bg-surface-muted text-muted`}>{t('admin.bookings.newCustomer')}</li>
       ) : (
         <>
@@ -349,6 +360,11 @@ function CustomerRecord({ user }: { user: AdminBooking['user'] }) {
           {noShows > 0 && (
             <li className={`${chip} bg-orange-100 text-orange-900 dark:bg-orange-950 dark:text-orange-200`}>
               {t('admin.bookings.noShows', count(noShows))}
+            </li>
+          )}
+          {lateReturns > 0 && (
+            <li className={`${chip} bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200`}>
+              {t('admin.bookings.lateReturns', count(lateReturns))}
             </li>
           )}
         </>

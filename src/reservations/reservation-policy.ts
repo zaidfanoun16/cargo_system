@@ -25,10 +25,20 @@ export const RUNNING_LATE_EXTRA_HOURS = 1;
 // The car can be handed over this many hours before the pickup time
 export const EARLY_PICKUP_HOURS = 1;
 
-// A user who reaches either limit within STRIKE_WINDOW_DAYS cannot make
-// new reservations until an admin allows it again
+// The car can be returned from this many hours before the return time
+// as a normal return; earlier than that it is an early return (allowed,
+// and shown as such)
+export const EARLY_RETURN_HOURS = 1;
+
+// A car returned more than this many hours after the return time is a
+// late return, which counts against the customer
+export const RETURN_GRACE_HOURS = 1;
+
+// A user who reaches any of these limits within STRIKE_WINDOW_DAYS
+// cannot make new reservations until an admin allows it again
 export const MAX_LATE_CANCELLATIONS = 3;
 export const MAX_NO_SHOWS = 2;
+export const MAX_LATE_RETURNS = 2;
 export const STRIKE_WINDOW_DAYS = 90;
 
 
@@ -110,6 +120,9 @@ export const POLICY = {
   runningLateExtraHours: RUNNING_LATE_EXTRA_HOURS,
   maxLateCancellations: MAX_LATE_CANCELLATIONS,
   maxNoShows: MAX_NO_SHOWS,
+  maxLateReturns: MAX_LATE_RETURNS,
+  earlyReturnHours: EARLY_RETURN_HOURS,
+  returnGraceHours: RETURN_GRACE_HOURS,
   maxActiveReservations: MAX_ACTIVE_RESERVATIONS,
   minLeadHours: MIN_LEAD_HOURS,
   strikeWindowDays: STRIKE_WINDOW_DAYS,

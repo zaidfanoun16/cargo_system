@@ -311,6 +311,10 @@ const en: typeof ar = {
       cancelled: 'No cancelled bookings',
     },
     number: 'Booking #{{id}}',
+    return: {
+      early: 'Returned early',
+      late: 'Returned late',
+    },
     pickupIn: 'Pickup {{when}}',
     returnIn: 'Return {{when}}',
     returnOverdue: 'Return overdue',
@@ -429,8 +433,9 @@ const en: typeof ar = {
         badge: 'Return',
         checks: 'Before confirming the return',
         pickedUpAt: 'Handed over',
-        onTime: 'The car is back on time.',
-        late: 'The customer is late returning the car: {{duration}}.',
+        onTime: 'The car is back on time (within an hour of the return time).',
+        early: 'Early return: more than an hour before the return time. You can take it back; the price does not change.',
+        late: 'Late return: the customer is {{duration}} late, and this counts as a strike for them.',
         checkCondition: 'I checked the car and there is no new damage',
         checkFuel: 'I checked the fuel level and got the key back',
         confirm: 'Confirm the return',
@@ -519,6 +524,9 @@ const en: typeof ar = {
       CUSTOMER_CANCELLED_LATE: '{{customer}} cancelled booking #{{id}} for the {{car}} late.',
       CUSTOMER_RUNNING_LATE: '{{customer}} is running late for the {{car}} (booking #{{id}}).',
       CUSTOMER_NO_SHOW: '{{customer}} did not pick up the {{car}} (booking #{{id}}).',
+      CUSTOMER_LATE_RETURN: '{{customer}} has not returned the {{car}} on time (booking #{{id}}).',
+      RETURN_OVERDUE: 'The {{car}} was due back {{returnDate}} and the one-hour grace has passed, so the return will count as late. Please return it soon.',
+      RESERVATION_COMPLETED_LATE: 'The {{car}} was returned late, and this counts as a strike.',
     },
   },
   walkIn: {
@@ -720,6 +728,7 @@ const en: typeof ar = {
       lateCancellations: 'Late cancellations: {{formatted}}',
       runningLate: 'Running late',
       noShows: 'No-shows: {{formatted}}',
+      lateReturns: 'Late returns: {{formatted}}',
       newCustomer: 'New customer',
     },
     cars: {
@@ -886,7 +895,9 @@ const en: typeof ar = {
       return: {
         title: 'Returning',
         items: [
-          'Bring the car back to the office at the return time.',
+          'Bring the car back to the office at the return time. Returning within an hour before or after it is on time.',
+          'You can bring it back earlier (an early return); the price does not change.',
+          'Returning more than an hour after the return time is a late return, and you are notified when the hour has passed.',
           'Show the same code to the staff; a return receipt can be printed.',
           'Return the car in the same condition and with the same fuel level.',
           'After the return you can rate the car to help other customers.',
@@ -904,7 +915,7 @@ const en: typeof ar = {
       strikes: {
         title: 'Strikes and booking blocks',
         items: [
-          'Within 90 days, 3 late cancellations or 2 no-shows stop your account from booking.',
+          'Within 90 days, 3 late cancellations, 2 no-shows or 2 late returns stop your account from booking.',
           'You are notified when booking is stopped, and CarGo can allow it again.',
           'Once allowed again, the count starts over.',
         ],

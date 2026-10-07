@@ -23,11 +23,13 @@ export type NotificationType =
   | 'PICKUP_REMINDER'
   | 'BOOKING_BLOCKED'
   | 'BOOKING_ALLOWED'
+  | 'RETURN_OVERDUE'
   // For admins
   | 'NEW_RESERVATION'
   | 'CUSTOMER_CANCELLED'
   | 'CUSTOMER_RUNNING_LATE'
-  | 'CUSTOMER_NO_SHOW';
+  | 'CUSTOMER_NO_SHOW'
+  | 'CUSTOMER_LATE_RETURN';
 
 // Details shown in the notification
 export type NotificationData = {
@@ -39,9 +41,11 @@ export type NotificationData = {
     modelAr: string | null;
   };
   startDate?: Date;
+  endDate?: Date;
   customer?: string;
   cancelledBy?: 'user' | 'admin' | 'system';
   lateCancellation?: boolean;
+  lateReturn?: boolean;
 };
 
 // A notification in the website's bell menu. Deleting the user removes

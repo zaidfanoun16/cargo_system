@@ -32,10 +32,12 @@ type NotificationType =
   | 'PICKUP_REMINDER'
   | 'BOOKING_BLOCKED'
   | 'BOOKING_ALLOWED'
+  | 'RETURN_OVERDUE'
   | 'NEW_RESERVATION'
   | 'CUSTOMER_CANCELLED'
   | 'CUSTOMER_RUNNING_LATE'
   | 'CUSTOMER_NO_SHOW'
+  | 'CUSTOMER_LATE_RETURN'
 
 type Notification = {
   id: number
@@ -44,9 +46,11 @@ type Notification = {
     reservationId?: number
     car?: { brand: string; brandAr: string | null; model: string; modelAr: string | null }
     startDate?: string
+    endDate?: string
     customer?: string
     cancelledBy?: 'user' | 'admin' | 'system'
     lateCancellation?: boolean
+    lateReturn?: boolean
   }
   readAt: string | null
   createdAt: string
@@ -69,6 +73,8 @@ const kinds: Record<NotificationType, { icon: LucideIcon; tone: string; to: stri
   CUSTOMER_CANCELLED: { icon: XCircle, tone: 'red', to: '/admin/bookings?status=CANCELLED' },
   CUSTOMER_RUNNING_LATE: { icon: Timer, tone: 'blue', to: '/admin/bookings?status=CONFIRMED' },
   CUSTOMER_NO_SHOW: { icon: CircleAlert, tone: 'orange', to: '/admin/bookings?status=NO_SHOW' },
+  RETURN_OVERDUE: { icon: AlarmClock, tone: 'red', to: '/my-bookings' },
+  CUSTOMER_LATE_RETURN: { icon: AlarmClock, tone: 'orange', to: '/admin/handover' },
 }
 
 const tones: Record<string, string> = {
@@ -186,12 +192,16 @@ export function NotificationBell() {
     const values = {
       car: data.car ? carName(data.car, language) : '',
       date: data.startDate ? formatDate(data.startDate, language, { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : '',
+      returnDate: data.endDate ? formatDate(data.endDate, language, { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : '',
       customer: data.customer ?? '',
       id: data.reservationId ? formatNumber(data.reservationId, language) : '',
     }
     if (notification.type === 'RESERVATION_CANCELLED') {
       const who = data.lateCancellation ? 'late' : (data.cancelledBy ?? 'admin')
       return t(`notifications.types.RESERVATION_CANCELLED.${who}`, values)
+    }
+    if (notification.type === 'RESERVATION_COMPLETED' && data.lateReturn) {
+      return t('notifications.types.RESERVATION_COMPLETED_LATE', values)
     }
     if (notification.type === 'CUSTOMER_CANCELLED' && data.lateCancellation) {
       return t('notifications.types.CUSTOMER_CANCELLED_LATE', values)
